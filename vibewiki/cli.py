@@ -11,6 +11,7 @@ from .import_url import import_url_session
 from .merge import merge_patches
 from .project import init_project
 from .review import patch_summary, review_patches
+from .review_board import generate_review_board
 from .validate import default_skill_path, validate_skill_file
 
 
@@ -136,6 +137,13 @@ def build_parser() -> argparse.ArgumentParser:
     review.add_argument("--patch-dir", default=None, help="Specific patch directory to review.")
     review.add_argument("--approve", action="store_true", help="Mark the patch as human-approved.")
     review.add_argument("--notes", default="", help="Review notes.")
+
+    review_board = subparsers.add_parser(
+        "review-board",
+        help="Generate a local HTML review board for candidate patches.",
+    )
+    review_board.add_argument("--patch-dir", default=None, help="Specific patch directory to render.")
+    review_board.add_argument("--output", default=None, help="HTML file to write.")
 
     merge = subparsers.add_parser("merge", help="Merge approved patches into project memory.")
     merge.add_argument("--patch-dir", default=None, help="Specific patch directory to merge.")
@@ -270,6 +278,13 @@ def run(args: argparse.Namespace) -> int:
         )
         decision = "approved" if args.approve else "needs_review"
         print(f"Review recorded ({decision}): {review_paths.review_file}")
+        return 0
+
+    if args.subcommand == "review-board":
+        patch_dir = _path(args.patch_dir) if args.patch_dir else None
+        output = _path(args.output) if args.output else None
+        board = generate_review_board(project, patch_dir=patch_dir, output=output)
+        print(f"Generated review board: {board}")
         return 0
 
     if args.subcommand == "merge":

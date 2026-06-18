@@ -22,6 +22,7 @@ The first version is intentionally local and conservative:
 - `vibewiki import-markdown` imports an exported Codex, Claude, or Cursor session.
 - `vibewiki import-url` imports a shared conversation URL, including ChatGPT share links.
 - `vibewiki distill` creates candidate memory patches.
+- `vibewiki review-board` renders a local HTML review board for candidate patches.
 - `vibewiki validate-skill` checks Skill Patch quality gates.
 - `vibewiki review` records human approval.
 - `vibewiki merge` appends approved patches to docs, skills, and agent rules.
@@ -92,6 +93,7 @@ vibewiki capture --goal "Fix simulator mismatch" \
   --command "python3 compare_outputs.py" \
   --tests "compare_outputs.py passed"
 vibewiki distill
+vibewiki review-board
 vibewiki validate-skill
 vibewiki review --approve
 vibewiki merge
@@ -102,6 +104,7 @@ Or import a saved AI session:
 ```bash
 vibewiki import-markdown ./codex-session.md
 vibewiki distill
+vibewiki review-board
 vibewiki validate-skill
 vibewiki review --approve
 vibewiki merge
@@ -112,6 +115,7 @@ Or import a shared ChatGPT conversation link:
 ```bash
 vibewiki import-url "https://chatgpt.com/share/..."
 vibewiki distill
+vibewiki review-board
 vibewiki review --approve
 vibewiki merge
 ```
@@ -155,6 +159,11 @@ vibewiki validate-skill --strict
 create a normalized `session.md` with detected title, outcome signals, commands,
 verification hints, and benchmark hints. Treat the normalized fields as a review
 draft, not as final truth.
+
+`review-board` writes a static `review_board.html` beside the selected patch. It
+groups findings, candidate skilllets, prompt patterns, workflows, open
+questions, merge suggestions, and approve/merge commands into one page so review
+does not require opening a directory full of Markdown files one by one.
 
 ## Project Philosophy
 

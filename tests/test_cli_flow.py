@@ -12,6 +12,7 @@ from vibewiki.import_url import chatgpt_share_to_markdown, html_to_markdown, imp
 from vibewiki.merge import merge_patches
 from vibewiki.project import init_project
 from vibewiki.review import review_patches
+from vibewiki.review_board import generate_review_board
 from vibewiki.validate import validate_skill_file, validate_skill_text
 
 
@@ -442,6 +443,38 @@ relative RMSE: 12.3%
         )
         self.assertIn("No readable ChatGPT conversation text was found", markdown)
         self.assertNotIn("Skip to content", markdown)
+
+    def test_review_board_renders_patch_artifacts(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = root / "review_session.md"
+            source.write_text(
+                """# MATLAB VEMU Compare Review
+
+We compared a VEMU output log against MATLAB gold.
+The check reported `max_abs_diff=0` and `bad_abs_gt_1=0`.
+
+```bash
+python3 compare_outputs.py
+```
+""",
+                encoding="utf-8",
+            )
+
+            session = import_markdown_session(root, source)
+            patches = distill_session(root, session_dir=session.session_dir)
+            board = generate_review_board(root, patch_dir=patches.patch_dir)
+
+            self.assertTrue(board.exists())
+            html = board.read_text(encoding="utf-8")
+            self.assertIn("Review Board", html)
+            self.assertIn("MATLAB VEMU Compare Review", html)
+            self.assertIn("Findings", html)
+            self.assertIn("Composable Units", html)
+            self.assertIn("matlab-gold-vemu-compare", html)
+            self.assertIn("vibewiki --project", html)
+            self.assertIn("review --patch-dir", html)
+            self.assertIn("merge --patch-dir", html)
 
 
 if __name__ == "__main__":
