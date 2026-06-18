@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -7,6 +8,7 @@ from pathlib import Path
 from vibewiki.capture import capture_session
 from vibewiki.distill import distill_session
 from vibewiki.import_markdown import extract_hint_lines, import_markdown_session
+from vibewiki.import_url import chatgpt_share_to_markdown, html_to_markdown, import_url_session
 from vibewiki.merge import merge_patches
 from vibewiki.project import init_project
 from vibewiki.review import review_patches
@@ -311,6 +313,135 @@ relative RMSE: 12.3%
         self.assertNotIn("shenyihao@greatcsi-PowerEdge-R740:~/Project$ git status", lines)
         self.assertIn("relative RMSE: 12.3%", lines)
         self.assertIn("功耗结果有效", lines)
+
+    def test_chatgpt_share_html_to_markdown_from_next_data(self) -> None:
+        payload = {
+            "props": {
+                "pageProps": {
+                    "serverResponse": {
+                        "data": {
+                            "mapping": {
+                                "a": {
+                                    "message": {
+                                        "author": {"role": "user"},
+                                        "content": {"parts": ["今天突然想到一个小工具。"]},
+                                    }
+                                },
+                                "b": {
+                                    "message": {
+                                        "author": {"role": "assistant"},
+                                        "content": {"parts": ["可以先把它记成 idea，而不是 skill。"]},
+                                    }
+                                },
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        source = (
+            "<html><head><title>Shared Chat</title></head><body>"
+            f"<script id=\"__NEXT_DATA__\" type=\"application/json\">{json.dumps(payload)}</script>"
+            "</body></html>"
+        )
+
+        markdown = chatgpt_share_to_markdown("https://chatgpt.com/share/example", source)
+        self.assertIn("# Shared Chat", markdown)
+        self.assertIn("## User", markdown)
+        self.assertIn("今天突然想到一个小工具。", markdown)
+        self.assertIn("## Assistant", markdown)
+        self.assertIn("不是 skill", markdown)
+
+    def test_chatgpt_share_html_to_markdown_from_react_router_stream(self) -> None:
+        devalue_table = [
+            {"_1": 2},
+            "messages",
+            [3, 14],
+            {"_4": 5, "_9": 10},
+            "author",
+            {"_6": 7},
+            "role",
+            "user",
+            "assistant",
+            "content",
+            {"_11": 12, "_13": 16},
+            "content_type",
+            "text",
+            "parts",
+            {"_4": 15, "_9": 17},
+            {"_6": 8},
+            [18],
+            {"_11": 12, "_13": 20},
+            "CloudRIC 这种对话应该能从分享链接里提取出来。",
+            "code",
+            [21],
+            "可以沉淀成 research_note，而不是强行做成 skill。",
+        ]
+        source = (
+            "<html><head><title>ChatGPT - CloudRIC能效提升分析</title></head><body>"
+            "<script>"
+            "window.__reactRouterContext.streamController.enqueue("
+            f"{json.dumps(json.dumps(devalue_table, ensure_ascii=False), ensure_ascii=False)}"
+            ");"
+            "</script>"
+            "</body></html>"
+        )
+
+        markdown = chatgpt_share_to_markdown(
+            "https://chatgpt.com/share/stream-example",
+            source,
+        )
+        self.assertIn("# ChatGPT - CloudRIC能效提升分析", markdown)
+        self.assertIn("## User", markdown)
+        self.assertIn("分享链接里提取出来", markdown)
+        self.assertIn("## Assistant", markdown)
+        self.assertIn("research_note", markdown)
+        self.assertNotIn("code", markdown)
+
+    def test_import_url_session_supports_file_url_html(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "project"
+            html_file = Path(tmp) / "share.html"
+            html_file.write_text(
+                """<html><head><title>Daily Chat</title></head>
+<body><main><p>灵感：把日常聊天里的想法留下来。</p>
+<p>下一步：试试 VibeWiki import-url。</p></main></body></html>""",
+                encoding="utf-8",
+            )
+
+            session = import_url_session(root, html_file.as_uri(), session_name="daily-chat")
+            session_text = session.session_md.read_text(encoding="utf-8")
+            raw_text = (session.session_dir / "raw_session.md").read_text(encoding="utf-8")
+            self.assertIn("Daily Chat", session_text)
+            self.assertIn("import-url", raw_text)
+            self.assertTrue((session.session_dir / "raw_source.html").exists())
+            self.assertIn("imported_url:", session.metadata_yaml.read_text(encoding="utf-8"))
+
+            patches = distill_session(root, session_dir=session.session_dir)
+            findings = patches.findings_index.read_text(encoding="utf-8")
+            self.assertIn("Ideas", findings)
+            skilllets = [
+                path
+                for path in patches.skilllets_dir.glob("*.md")
+                if path.name != "index.md"
+            ]
+            self.assertEqual(skilllets, [])
+
+    def test_html_to_markdown_fallback_keeps_readable_text(self) -> None:
+        markdown = html_to_markdown(
+            "https://example.com/chat",
+            "<html><head><title>Plain Page</title></head><body><p>一个普通网页。</p></body></html>",
+        )
+        self.assertIn("# Plain Page", markdown)
+        self.assertIn("一个普通网页。", markdown)
+
+    def test_chatgpt_share_without_conversation_does_not_import_login_shell(self) -> None:
+        markdown = html_to_markdown(
+            "https://chatgpt.com/share/example",
+            "<html><head><title>ChatGPT</title></head><body>Skip to content Log in</body></html>",
+        )
+        self.assertIn("No readable ChatGPT conversation text was found", markdown)
+        self.assertNotIn("Skip to content", markdown)
 
 
 if __name__ == "__main__":

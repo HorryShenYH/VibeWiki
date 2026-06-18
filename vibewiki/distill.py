@@ -482,6 +482,9 @@ def _detect_composable_units(
     if units:
         return units
 
+    if not commands:
+        return []
+
     fallback_slug = slugify(goal, fallback=session_id)
     fallback_steps = tuple(commands[:5]) or ("Capture the exact reusable steps before approving this skilllet.",)
     return [

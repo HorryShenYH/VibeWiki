@@ -7,6 +7,7 @@ from pathlib import Path
 from .capture import capture_session
 from .distill import distill_session
 from .import_markdown import import_markdown_session
+from .import_url import import_url_session
 from .merge import merge_patches
 from .project import init_project
 from .review import patch_summary, review_patches
@@ -102,6 +103,30 @@ def build_parser() -> argparse.ArgumentParser:
     import_markdown.add_argument("--benchmark", default="", help="Override detected benchmark notes.")
     import_markdown.add_argument("--notes", default="", help="User notes to attach to the import.")
     import_markdown.add_argument(
+        "--things-not-to-record",
+        default="",
+        help="Failed paths or sensitive details that should not enter project memory.",
+    )
+
+    import_url = subparsers.add_parser(
+        "import-url",
+        help="Import a shared AI conversation URL, such as a ChatGPT share link.",
+    )
+    import_url.add_argument("url", help="Shared conversation URL to import.")
+    import_url.add_argument("--session-name", default=None, help="Short name used in the session id.")
+    import_url.add_argument("--goal", default="", help="Override detected session goal.")
+    import_url.add_argument("--outcome", default="", help="Override detected final outcome.")
+    import_url.add_argument(
+        "--command",
+        dest="commands",
+        action="append",
+        default=[],
+        help="Add a key command. Can be repeated.",
+    )
+    import_url.add_argument("--tests", default="", help="Override detected verification notes.")
+    import_url.add_argument("--benchmark", default="", help="Override detected benchmark notes.")
+    import_url.add_argument("--notes", default="", help="User notes to attach to the import.")
+    import_url.add_argument(
         "--things-not-to-record",
         default="",
         help="Failed paths or sensitive details that should not enter project memory.",
@@ -209,6 +234,27 @@ def run(args: argparse.Namespace) -> int:
         print(f"Imported markdown session: {paths.session_dir}")
         print(f"- {paths.session_md}")
         print(f"- {paths.session_dir / 'raw_session.md'}")
+        print(f"- {paths.diff_patch}")
+        print(f"- {paths.metadata_yaml}")
+        return 0
+
+    if args.subcommand == "import-url":
+        paths = import_url_session(
+            project,
+            args.url,
+            goal=args.goal,
+            outcome=args.outcome,
+            commands=args.commands or [],
+            tests=args.tests,
+            benchmark=args.benchmark,
+            notes=args.notes,
+            things_not_to_record=args.things_not_to_record,
+            session_name=args.session_name,
+        )
+        print(f"Imported URL session: {paths.session_dir}")
+        print(f"- {paths.session_md}")
+        print(f"- {paths.session_dir / 'raw_session.md'}")
+        print(f"- {paths.session_dir / 'raw_source.html'}")
         print(f"- {paths.diff_patch}")
         print(f"- {paths.metadata_yaml}")
         return 0

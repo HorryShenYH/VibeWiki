@@ -20,6 +20,7 @@ The first version is intentionally local and conservative:
 - `vibewiki init` creates the project memory folders.
 - `vibewiki capture` records one coding session, including git diff and notes.
 - `vibewiki import-markdown` imports an exported Codex, Claude, or Cursor session.
+- `vibewiki import-url` imports a shared conversation URL, including ChatGPT share links.
 - `vibewiki distill` creates candidate memory patches.
 - `vibewiki validate-skill` checks Skill Patch quality gates.
 - `vibewiki review` records human approval.
@@ -106,6 +107,21 @@ vibewiki review --approve
 vibewiki merge
 ```
 
+Or import a shared ChatGPT conversation link:
+
+```bash
+vibewiki import-url "https://chatgpt.com/share/..."
+vibewiki distill
+vibewiki review --approve
+vibewiki merge
+```
+
+`import-url` keeps both a readable `raw_session.md` and the original
+`raw_source.html`. For ChatGPT share pages, it can extract conversations from
+the page data stream instead of only reading the visible login/sidebar shell.
+If a page is private, expired, or rendered in a new unsupported format, the raw
+HTML is still preserved so the parser can be improved later.
+
 This creates:
 
 ```text
@@ -135,8 +151,8 @@ Use strict validation when you want warnings to block promotion:
 vibewiki validate-skill --strict
 ```
 
-`import-markdown` preserves the full original file as `raw_session.md`, then
-creates a normalized `session.md` with detected title, outcome signals, commands,
+`import-markdown` and `import-url` preserve the full original evidence, then
+create a normalized `session.md` with detected title, outcome signals, commands,
 verification hints, and benchmark hints. Treat the normalized fields as a review
 draft, not as final truth.
 
