@@ -6,7 +6,7 @@ from pathlib import Path
 
 from vibewiki.capture import capture_session
 from vibewiki.distill import distill_session
-from vibewiki.import_markdown import import_markdown_session
+from vibewiki.import_markdown import extract_hint_lines, import_markdown_session
 from vibewiki.merge import merge_patches
 from vibewiki.project import init_project
 from vibewiki.review import review_patches
@@ -104,6 +104,50 @@ python3 compare_outputs.py
             patches = distill_session(root, session_dir=session.session_dir)
             self.assertTrue(patches.skill_patch.exists())
             self.assertIn("make -C /work/VEMU/dsl all", patches.skill_patch.read_text(encoding="utf-8"))
+
+    def test_import_markdown_does_not_treat_paths_as_commands(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = root / "paths_and_commands.md"
+            source.write_text(
+                """# Path Heavy Session
+
+Useful files:
+- `Debug/emulator_vins_result/task0/hart0`
+- `./5g_lite/tasks/nrPDSCHDag1_v2/Task.c`
+
+Useful commands:
+```bash
+cd /work/VEMU
+rm -rf Debug/emulator_vins_result
+./Emulator test.hex -w -j../dsl/final_output/dag1.json -b../dsl/bin/dag1.bin
+Debug/Emulator test.hex -w -j../dsl/final_output/dag1.json -b../dsl/bin/dag1.bin
+```
+""",
+                encoding="utf-8",
+            )
+
+            session = import_markdown_session(root, source)
+            session_text = session.session_md.read_text(encoding="utf-8")
+            self.assertIn("cd /work/VEMU", session_text)
+            self.assertIn("rm -rf Debug/emulator_vins_result", session_text)
+            self.assertIn("./Emulator test.hex", session_text)
+            self.assertIn("Debug/Emulator test.hex", session_text)
+            self.assertNotIn("- Debug/emulator_vins_result/task0/hart0", session_text)
+            self.assertNotIn("- ./5g_lite/tasks/nrPDSCHDag1_v2/Task.c", session_text)
+
+    def test_import_markdown_hint_matching_avoids_poweredge_prompt(self) -> None:
+        lines = extract_hint_lines(
+            """shenyihao@greatcsi-PowerEdge-R740:~/Project$ git status
+relative RMSE: 12.3%
+功耗结果有效
+""",
+            ("power", "relative rmse", "功耗"),
+        )
+
+        self.assertNotIn("shenyihao@greatcsi-PowerEdge-R740:~/Project$ git status", lines)
+        self.assertIn("relative RMSE: 12.3%", lines)
+        self.assertIn("功耗结果有效", lines)
 
 
 if __name__ == "__main__":

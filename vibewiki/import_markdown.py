@@ -9,20 +9,26 @@ from .text_utils import compact_list, slugify
 
 
 COMMAND_PREFIXES = (
-    "./",
     "bash ",
     "cargo ",
+    "cd ",
     "cmake ",
     "codex ",
-    "Debug/",
+    "cp ",
+    "find ",
     "gh ",
     "git ",
+    "jq ",
     "make ",
-    "make -C ",
+    "mkdir ",
+    "mv ",
     "npm ",
+    "perl ",
     "python ",
     "python3 ",
-    "pytest",
+    "pytest ",
+    "rm ",
+    "sed ",
     "scons ",
     "vibewiki ",
 )
@@ -86,6 +92,12 @@ def _candidate_command(line: str) -> str:
     if stripped.startswith("> "):
         stripped = stripped[2:].strip()
     stripped = stripped.strip("`")
+    if stripped == "pytest":
+        return stripped
+    if stripped.startswith("./"):
+        return stripped if " " in stripped else ""
+    if stripped.startswith("Debug/Emulator "):
+        return stripped
     if any(stripped.startswith(prefix) for prefix in COMMAND_PREFIXES):
         return stripped
     return ""
@@ -133,7 +145,7 @@ def extract_hint_lines(markdown: str, hints: tuple[str, ...], limit: int = 12) -
         if not clean or clean.startswith("<details"):
             continue
         lowered = clean.lower()
-        if any(hint in lowered for hint in hints):
+        if any(matches_hint(lowered, hint) for hint in hints):
             if len(clean) > 220:
                 clean = clean[:217] + "..."
             if clean not in found:
@@ -141,6 +153,14 @@ def extract_hint_lines(markdown: str, hints: tuple[str, ...], limit: int = 12) -
         if len(found) >= limit:
             break
     return found
+
+
+def matches_hint(text: str, hint: str) -> bool:
+    lowered_hint = hint.lower()
+    if re.search(r"[\u4e00-\u9fff]", lowered_hint):
+        return lowered_hint in text
+    escaped = re.escape(lowered_hint).replace(r"\ ", r"\s+")
+    return re.search(rf"(?<![a-z0-9_]){escaped}(?![a-z0-9_])", text) is not None
 
 
 def render_import_summary(source: Path, title: str, outcome: str) -> str:
