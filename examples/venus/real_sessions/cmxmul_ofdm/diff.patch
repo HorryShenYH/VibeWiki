@@ -1,0 +1,28 @@
+diff --git a/5g_lite/tasks/nrPDSCHDag1_v2/Task_nrOFDMDemodulation.c b/5g_lite/tasks/nrPDSCHDag1_v2/Task_nrOFDMDemodulation.c
+index example..example 100644
+--- a/5g_lite/tasks/nrPDSCHDag1_v2/Task_nrOFDMDemodulation.c
++++ b/5g_lite/tasks/nrPDSCHDag1_v2/Task_nrOFDMDemodulation.c
+@@ -1,5 +1,8 @@
+-// Experimental all-cmxmul OFDM path.
+-CMUL_WN_V1_STYLE(...)
++// Default OFDM path keeps the explicit Venus fixed-point sequence because it
++// remains bit-exact with the baseline through the multi-stage FFT chain.
++CMUL_WN_EXPLICIT_V1_STYLE(...)
++
++// A separate backup file keeps the corrected cmxmul operand mapping for future
++// experiments, but it is not used by the default task.
+diff --git a/5g_lite/tasks/nrPDSCHDag1_v2/Task_nrOFDMDemodulation.c.cmxmul_logic_correct_20260617 b/5g_lite/tasks/nrPDSCHDag1_v2/Task_nrOFDMDemodulation.c.cmxmul_logic_correct_20260617
+new file mode 100644
+index 0000000..example
+--- /dev/null
++++ b/5g_lite/tasks/nrPDSCHDag1_v2/Task_nrOFDMDemodulation.c.cmxmul_logic_correct_20260617
+@@ -0,0 +1,8 @@
++// Experimental backup only.
++// Corrected operand mapping:
++vcmxmul(&(result_real), &(result_imag),
++        tmp_real, tmp_imag,
++        sin_vec, cos_vec,
++        MASKREAD_OFF, length);
++// Not enabled by default because OFDM/FFT amplifies the remaining fixed-point
++// quantization differences.
+
