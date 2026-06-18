@@ -1,0 +1,33 @@
+version: 1
+project_name: VibeWiki
+wiki_dir: docs/wiki
+skills_dir: skills
+skilllets_dir: skills/skilllets
+prompt_patterns_dir: skills/prompt_patterns
+workflows_dir: skills/workflows
+agent_rule_files:
+  - AGENTS.md
+review:
+  require_human_approval: true
+distill:
+  mode: local
+  uncertain_by_default: true
+retrieval:
+  default_scope: all
+  search_max_items: 10
+  search_snippet_chars: 500
+  context_max_items: 8
+  context_max_chars_per_item: 700
+  ask_max_items: 8
+  ask_context_chars: 8000
+  format: yaml
+llm:
+  base_url_env: VIBEWIKI_LLM_BASE_URL
+  api_key_env: VIBEWIKI_LLM_API_KEY
+  model_env: VIBEWIKI_LLM_MODEL
+embedding:
+  enabled: auto
+  cache_dir: .vibewiki/cache/embeddings
+  base_url_env: VIBEWIKI_EMBEDDING_BASE_URL
+  api_key_env: VIBEWIKI_EMBEDDING_API_KEY
+  model_env: VIBEWIKI_EMBEDDING_MODEL

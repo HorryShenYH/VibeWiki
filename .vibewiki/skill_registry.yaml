@@ -1,0 +1,5 @@
+# VibeWiki skill registry
+# This file lets later sessions update existing skilllets instead of creating
+# redundant near-duplicates.
+version: 1
+units:

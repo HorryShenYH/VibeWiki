@@ -168,6 +168,10 @@ groups findings, candidate skilllets, prompt patterns, workflows, open
 questions, merge suggestions, and approve/merge commands into one page so review
 does not require opening a directory full of Markdown files one by one.
 
+VibeWiki also dogfoods this workflow on its own design conversations. See
+[`docs/improvement_backlog.md`](docs/improvement_backlog.md) and
+[`docs/wiki/`](docs/wiki/) for the current reviewed product memory.
+
 ## Reuse Memory
 
 VibeWiki has two reuse entrances:
