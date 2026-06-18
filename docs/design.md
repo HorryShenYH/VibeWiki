@@ -4,7 +4,8 @@
 
 VibeWiki is a project memory framework for AI coding. It turns successful
 Codex, Claude, Cursor, or Copilot sessions into reviewed Wiki patches,
-composable skilllets, prompt patterns, workflows, and agent-facing rules.
+typed findings, composable skilllets, prompt patterns, workflows, and
+agent-facing rules.
 
 ## Core Loop
 
@@ -15,13 +16,26 @@ capture -> distill -> review -> merge -> reuse
 ## Core Model
 
 ```text
-Session -> Findings -> Skilllets / Prompt Patterns / Workflows -> Review -> Merge
+Session -> Findings -> Promotion -> Skilllets / Patterns / Workflows -> Review -> Merge
 ```
 
 A session is evidence, not a skill. One long session may contain multiple
 purposes and reusable ideas. A reusable skilllet should stay small enough to
 compose with others, and repeated sessions should improve the same skilllet
 rather than creating redundant copies.
+
+Findings are the default memory unit. They can be:
+
+- `knowledge`: durable facts and explanations
+- `issue`: discovered problems, caveats, and deferred bugs
+- `todo`: follow-up work
+- `idea`: sparks that may matter later
+- `research_note`: hypotheses, experiments, references, and research context
+- `direction`: project or research directions
+
+A finding is promoted to a skilllet only when it is procedural: it has a clear
+trigger, inputs, outputs, steps, and verification. This keeps the skill library
+useful instead of turning every interesting sentence into a skill.
 
 ## Skill Registry
 
@@ -67,6 +81,8 @@ VibeWiki creates candidate patches:
 - Skilllets: small repeatable capability units with evidence and verification
 - Prompt Patterns: reusable prompts and agent task package templates
 - Workflows: larger procedures composed from skilllets and prompt patterns
+- Findings: typed non-skill memory for knowledge, issues, todos, ideas, notes,
+  and directions
 - Skill Patch: compatibility review entry point for current tooling
 - Agent Rule Patch: rules for future coding agents
 - Clarifying Questions: missing context before merge

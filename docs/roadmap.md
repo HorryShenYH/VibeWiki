@@ -10,6 +10,7 @@
 - human review record
 - append-only merge
 - import exported session Markdown
+- typed findings for knowledge, issues, todos, ideas, research notes, and directions
 - composable skilllets, prompt patterns, and workflows
 - skill registry for exact slug/alias reuse and reviewed merge suggestions
 

@@ -25,6 +25,11 @@ class VibeWikiFlowTest(unittest.TestCase):
             self.assertTrue((root / "skills" / "skilllets" / "index.md").exists())
             self.assertTrue((root / "skills" / "prompt_patterns" / "index.md").exists())
             self.assertTrue((root / "skills" / "workflows" / "index.md").exists())
+            self.assertTrue((root / "docs" / "wiki" / "knowledge.md").exists())
+            self.assertTrue((root / "docs" / "wiki" / "todos.md").exists())
+            self.assertTrue((root / "docs" / "wiki" / "ideas.md").exists())
+            self.assertTrue((root / "docs" / "wiki" / "research_notes.md").exists())
+            self.assertTrue((root / "docs" / "wiki" / "directions.md").exists())
             self.assertTrue((root / ".vibewiki" / "skill_registry.yaml").exists())
 
             session = capture_session(
@@ -41,6 +46,7 @@ class VibeWikiFlowTest(unittest.TestCase):
             self.assertTrue(patches.knowledge_patch.exists())
             self.assertTrue(patches.skill_patch.exists())
             self.assertTrue(patches.agent_rule_patch.exists())
+            self.assertTrue(patches.findings_index.exists())
             self.assertTrue(patches.merge_suggestions.exists())
             self.assertTrue((patches.skilllets_dir / "fix-simulator-mismatch.md").exists())
             self.assertIn("Which test", patches.questions.read_text(encoding="utf-8"))
@@ -182,6 +188,51 @@ QPSK:   max_abs_diff=0 bad_abs_gt_1=0
             self.assertIn(
                 "MATLAB NR Demod Reference",
                 merged.read_text(encoding="utf-8"),
+            )
+
+    def test_findings_keep_non_procedural_memory_out_of_skilllets(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = root / "vcmxmul_session.md"
+            source.write_text(
+                """# VCMXMUL OFDM Notes
+
+VCMXMUL uses the Gauss form `C*(A-B) + B*(C-D)`.
+It is algebraically valid, but not bit-exact in fixed-point because 截断 and 饱和
+happen at different points. The OFDM FFT output had relative RMSE about 140%,
+so the error is 不可忽略.
+
+The default path should stay `CMUL_WN_EXPLICIT_V1_STYLE` with no `vns_cmxmul`.
+Future direction: consider raw product, wide post_adder, final shift, and
+VCMXMUL_ACC for 8bit precision.
+
+For evaluation, compute MAE, RMSE, relative RMSE, correlation, and mismatch.
+""",
+                encoding="utf-8",
+            )
+
+            session = import_markdown_session(root, source)
+            patches = distill_session(root, session_dir=session.session_dir)
+
+            self.assertTrue(
+                (patches.findings_dir / "knowledge__vcmxmul-fixed-point-gauss-caveat.md").exists()
+            )
+            self.assertTrue(
+                (patches.findings_dir / "direction__cau-vcmxmul-raw-product-wide-accumulate.md").exists()
+            )
+            self.assertFalse(
+                (patches.skilllets_dir / "vcmxmul-fixed-point-gauss-caveat.md").exists()
+            )
+            self.assertTrue(
+                (patches.skilllets_dir / "quantized-output-error-analysis.md").exists()
+            )
+
+            review_patches(root, patch_dir=patches.patch_dir, approve=True)
+            changed = merge_patches(root, patch_dir=patches.patch_dir)
+            self.assertIn(root / "docs" / "wiki" / "knowledge.md", changed)
+            self.assertIn(root / "docs" / "wiki" / "directions.md", changed)
+            self.assertTrue(
+                (root / "skills" / "skilllets" / "quantized-output-error-analysis.md").exists()
             )
 
     def test_registry_reuses_existing_skilllet_slug(self) -> None:

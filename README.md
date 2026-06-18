@@ -6,14 +6,14 @@ Turn AI coding sessions into reviewed project memory.
 
 AI coding is fast, but the useful knowledge often disappears into chat logs,
 temporary commands, diffs, and test output. VibeWiki captures what actually
-worked, turns it into reviewable Wiki patches, composable skilllets, prompt
-patterns, workflows, and Agent Rule patches, then feeds that knowledge back into
-future development.
+worked, turns it into reviewable findings, Wiki patches, composable skilllets,
+prompt patterns, workflows, and Agent Rule patches, then feeds that knowledge
+back into future development.
 
 In plain words: VibeWiki is a memory layer for AI coding. After Codex, Claude, or
-Cursor helps you fix something, VibeWiki turns the messy conversation into small
-reusable capability units so the next developer or agent can compose them instead
-of rediscovering them.
+Cursor helps you fix something, VibeWiki turns the messy conversation into
+durable memory: facts, issues, todos, ideas, research notes, directions, and
+small reusable capability units.
 
 The first version is intentionally local and conservative:
 
@@ -31,13 +31,14 @@ questions for a human.
 
 ## What It Does
 
-VibeWiki treats a finished coding session as evidence, not as a skill by itself.
-One session may contain several reusable ideas; several sessions may improve the
-same idea over time.
+VibeWiki treats a finished AI conversation as evidence, not as a skill by
+itself. One conversation may contain several useful ideas; several conversations
+may improve the same idea over time.
 
 It creates reviewable artifacts:
 
 - a Wiki note that explains what changed and why
+- findings: knowledge, issues, todos, ideas, research notes, and directions
 - skilllets: small, composable capability units
 - prompt patterns: reusable prompts and agent task package shapes
 - workflows: larger procedures composed from skilllets
@@ -115,6 +116,12 @@ This creates:
   patches/
   reviews/
 docs/wiki/
+  knowledge.md
+  known_issues.md
+  todos.md
+  ideas.md
+  research_notes.md
+  directions.md
 skills/
   skilllets/
   prompt_patterns/
@@ -139,10 +146,11 @@ draft, not as final truth.
 2. Record the final verified path, not every failed attempt.
 3. Keep knowledge out of the main Wiki until a human approves it.
 4. Extract small skilllets instead of one oversized session-specific skill.
-5. Let repeated sessions evolve the same skilllet by appending evidence.
-6. Validate Skill contracts before they become project guidance.
-7. Treat agent-facing rules as a first-class output.
-8. Start local, then add GitHub PR workflows and retrieval.
+5. Keep non-procedural memory as findings rather than forcing it into skills.
+6. Let repeated sessions evolve the same skilllet by appending evidence.
+7. Validate Skill contracts before they become project guidance.
+8. Treat agent-facing rules as a first-class output.
+9. Start local, then add GitHub PR workflows and retrieval.
 
 ## Roadmap
 

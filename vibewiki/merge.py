@@ -21,6 +21,15 @@ UNIT_DIRS = {
     "workflows": "workflow",
 }
 
+FINDING_WIKI_FILES = {
+    "knowledge": "knowledge.md",
+    "issue": "known_issues.md",
+    "todo": "todos.md",
+    "idea": "ideas.md",
+    "research_note": "research_notes.md",
+    "direction": "directions.md",
+}
+
 
 def _approved(project: Path, session_id: str) -> bool:
     review_file = project / ".vibewiki" / "reviews" / f"{session_id}.yaml"
@@ -70,6 +79,30 @@ def _merge_unit_dir(
     return changed
 
 
+def _merge_findings(root: Path, patch_dir: Path, session_id: str) -> list[Path]:
+    source_dir = patch_dir / "findings"
+    if not source_dir.exists():
+        return []
+
+    changed: list[Path] = []
+    for source in sorted(source_dir.glob("*.md")):
+        if source.name == "index.md":
+            continue
+        body = read_text_if_exists(source)
+        if not body:
+            continue
+        if "__" in source.stem:
+            kind, slug = source.stem.split("__", 1)
+        else:
+            kind, slug = "knowledge", source.stem
+        wiki_file = FINDING_WIKI_FILES.get(kind, "knowledge.md")
+        target = root / "docs" / "wiki" / wiki_file
+        marker = f"<!-- vibewiki:{session_id}:finding:{kind}:{slug} -->"
+        if append_marked_section(target, marker, body):
+            changed.append(target)
+    return changed
+
+
 def merge_patches(
     project: Path,
     *,
@@ -108,10 +141,11 @@ def merge_patches(
         changed.append(skill_file)
     if append_marked_section(agents_file, agent_marker, agent_rules):
         changed.append(agents_file)
+    changed.extend(_merge_findings(root, selected_patch_dir, session_id))
     for unit_dir in UNIT_DIRS:
         changed.extend(_merge_unit_dir(root, selected_patch_dir, session_id, unit_dir, registry_entries))
     write_registry(registry_file, registry_entries)
     if read_text_if_exists(registry_file) != registry_before:
         changed.append(registry_file)
 
-    return changed
+    return list(dict.fromkeys(changed))

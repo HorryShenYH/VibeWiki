@@ -21,6 +21,8 @@ class PatchPaths:
     skill_patch: Path
     agent_rule_patch: Path
     questions: Path
+    findings_index: Path
+    findings_dir: Path
     merge_suggestions: Path
     skilllets_dir: Path
     prompt_patterns_dir: Path

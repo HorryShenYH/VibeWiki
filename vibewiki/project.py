@@ -30,7 +30,12 @@ sessions.
 ## Pages
 
 - [Development Notes](development_notes.md)
+- [Knowledge](knowledge.md)
 - [Known Issues](known_issues.md)
+- [Todos](todos.md)
+- [Ideas](ideas.md)
+- [Research Notes](research_notes.md)
+- [Directions](directions.md)
 """
 
 DEVELOPMENT_NOTES = """# Development Notes
@@ -42,6 +47,35 @@ KNOWN_ISSUES = """# Known Issues
 
 Use this page for verified recurring issues, deprecated workarounds, and
 important caveats.
+"""
+
+KNOWLEDGE = """# Knowledge
+
+Reviewed facts, explanations, and project memory that are useful but not
+necessarily executable skills.
+"""
+
+TODOS = """# Todos
+
+Reviewed follow-up tasks, loose ends, and deferred work discovered during
+sessions.
+"""
+
+IDEAS = """# Ideas
+
+Reviewed ideas and sparks worth keeping even when they are not immediately
+actionable.
+"""
+
+RESEARCH_NOTES = """# Research Notes
+
+Reviewed hypotheses, experiment notes, references, and research-oriented
+observations.
+"""
+
+DIRECTIONS = """# Directions
+
+Reviewed project or research directions that may shape future work.
 """
 
 SKILLS_INDEX = """# Skills
@@ -108,7 +142,12 @@ def init_project(project: Path, force: bool = False) -> list[Path]:
         root / ".vibewiki" / "skill_registry.yaml": REGISTRY_TEMPLATE,
         root / "docs" / "wiki" / "index.md": WIKI_INDEX,
         root / "docs" / "wiki" / "development_notes.md": DEVELOPMENT_NOTES,
+        root / "docs" / "wiki" / "knowledge.md": KNOWLEDGE,
         root / "docs" / "wiki" / "known_issues.md": KNOWN_ISSUES,
+        root / "docs" / "wiki" / "todos.md": TODOS,
+        root / "docs" / "wiki" / "ideas.md": IDEAS,
+        root / "docs" / "wiki" / "research_notes.md": RESEARCH_NOTES,
+        root / "docs" / "wiki" / "directions.md": DIRECTIONS,
         root / "skills" / "index.md": SKILLS_INDEX,
         root / "skills" / "skilllets" / "index.md": SKILLLETS_INDEX,
         root / "skills" / "prompt_patterns" / "index.md": PROMPT_PATTERNS_INDEX,
@@ -138,3 +177,11 @@ def ensure_workspace(project: Path) -> None:
     registry = root / ".vibewiki" / "skill_registry.yaml"
     if not registry.exists():
         registry.write_text(REGISTRY_TEMPLATE, encoding="utf-8")
+    for path, text in {
+        root / "docs" / "wiki" / "knowledge.md": KNOWLEDGE,
+        root / "docs" / "wiki" / "todos.md": TODOS,
+        root / "docs" / "wiki" / "ideas.md": IDEAS,
+        root / "docs" / "wiki" / "research_notes.md": RESEARCH_NOTES,
+        root / "docs" / "wiki" / "directions.md": DIRECTIONS,
+    }.items():
+        write_text_if_allowed(path, text)

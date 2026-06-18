@@ -52,6 +52,7 @@ def patch_summary(project: Path, patch_dir: Path | None = None) -> str:
         selected_patch_dir / "skill_patch.md",
         selected_patch_dir / "agent_rule_patch.md",
         selected_patch_dir / "questions.md",
+        selected_patch_dir / "findings",
         selected_patch_dir / "merge_suggestions.md",
         selected_patch_dir / "composable_units.md",
         selected_patch_dir / "skilllets",

@@ -47,6 +47,98 @@ class ComposableUnit:
     related: tuple[str, ...]
 
 
+@dataclass(frozen=True)
+class FindingSpec:
+    kind: str
+    slug: str
+    title: str
+    summary: str
+    keywords: tuple[str, ...]
+    min_matches: int
+    evidence_hint: str
+    follow_up: str = ""
+
+
+@dataclass(frozen=True)
+class Finding:
+    kind: str
+    slug: str
+    title: str
+    summary: str
+    evidence: tuple[str, ...]
+    follow_up: str = ""
+
+
+FINDING_TYPE_LABELS = {
+    "knowledge": "Knowledge",
+    "issue": "Issue",
+    "todo": "Todo",
+    "idea": "Idea",
+    "research_note": "Research Note",
+    "direction": "Direction",
+}
+
+FINDING_TYPE_PLURALS = {
+    "knowledge": "Knowledge",
+    "issue": "Issues",
+    "todo": "Todos",
+    "idea": "Ideas",
+    "research_note": "Research Notes",
+    "direction": "Directions",
+}
+
+
+FINDING_WIKI_FILES = {
+    "knowledge": "knowledge.md",
+    "issue": "known_issues.md",
+    "todo": "todos.md",
+    "idea": "ideas.md",
+    "research_note": "research_notes.md",
+    "direction": "directions.md",
+}
+
+
+FINDING_SPECS = [
+    FindingSpec(
+        kind="knowledge",
+        slug="vcmxmul-fixed-point-gauss-caveat",
+        title="VCMXMUL Gauss Form Is Not Fixed-Point Equivalent",
+        summary="Gauss-style three-multiply VCMXMUL is algebraically valid, but it is not bit-exact to explicit fixed-point complex multiply because shift, truncation, and saturation happen at different points.",
+        keywords=("C*(A-B)", "B*(C-D)", "bit-exact", "截断", "饱和", "Gauss"),
+        min_matches=3,
+        evidence_hint="Keep this as knowledge unless a future task needs an executable VCMXMUL debug workflow.",
+    ),
+    FindingSpec(
+        kind="issue",
+        slug="vcmxmul-ofdm-error-amplification",
+        title="VCMXMUL Error Amplifies Through OFDM FFT Stages",
+        summary="Even small local VCMXMUL differences can become signal-sized after multi-stage OFDM/FFT butterfly propagation.",
+        keywords=("relative RMSE", "OFDM", "FFT", "140%", "87%", "不可忽略"),
+        min_matches=3,
+        evidence_hint="This should block replacing the default OFDM path with VCMXMUL without new validation.",
+    ),
+    FindingSpec(
+        kind="knowledge",
+        slug="vcmxmul-ofdm-default-explicit-path",
+        title="OFDM Default Path Should Stay Explicit Complex Multiply",
+        summary="For the checked OFDM task, the default VEMU path should stay on explicit vmul/vssub/vsadd and keep the corrected VCMXMUL macro only as an experiment.",
+        keywords=("CMUL_WN_EXPLICIT_V1_STYLE", "vns_cmxmul", "bit-exact", "默认", "备份"),
+        min_matches=3,
+        evidence_hint="A generated VCMXMUL count of zero confirmed the default path.",
+    ),
+    FindingSpec(
+        kind="direction",
+        slug="cau-vcmxmul-raw-product-wide-accumulate",
+        title="Consider Raw Product Wide Accumulate For 8bit VCMXMUL",
+        summary="A future RTL direction is to keep ordinary CAU instructions unchanged while giving VCMXMUL a raw-product path, wide post-add, and final shift/saturate.",
+        keywords=("raw product", "wide post_adder", "final shift", "VCMXMUL_ACC", "8bit"),
+        min_matches=3,
+        evidence_hint="This is a design direction, not a current implementation task.",
+        follow_up="Evaluate timing, pipeline alignment, and VEMU model compatibility before implementation.",
+    ),
+]
+
+
 COMPOSABLE_UNIT_SPECS = [
     ComposableUnitSpec(
         kind="prompt_pattern",
@@ -263,27 +355,6 @@ COMPOSABLE_UNIT_SPECS = [
     ),
     ComposableUnitSpec(
         kind="skilllet",
-        slug="vcmxmul-fixed-point-gauss-caveat",
-        title="VCMXMUL Fixed Point Gauss Caveat",
-        purpose="Remember that Gauss-style three-multiply VCMXMUL is algebraically valid but not bit-exact to explicit fixed-point complex multiply.",
-        keywords=("C*(A-B)", "B*(C-D)", "bit-exact", "截断", "饱和", "Gauss"),
-        min_matches=3,
-        when_to_use=(
-            "A fused VCMXMUL replacement produces different OFDM or FFT results.",
-            "Someone assumes algebraic equivalence implies fixed-point equivalence.",
-        ),
-        inputs=("explicit vmul/add-sub path", "VCMXMUL path", "shift and saturation settings"),
-        outputs=("root-cause explanation", "safe replacement guidance"),
-        steps=(
-            "Compare where each path shifts, truncates, and saturates.",
-            "Inspect whether pre-add terms such as A-B and C-D change dynamic range.",
-            "Avoid replacing long fixed-point FFT chains with Gauss VCMXMUL without error measurement.",
-        ),
-        verification=("A local example shows the fused and explicit paths diverge under fixed-point arithmetic.",),
-        related=("quantized-output-error-analysis", "venus-vcmxmul-rtl-vemu-consistency"),
-    ),
-    ComposableUnitSpec(
-        kind="skilllet",
         slug="quantized-output-error-analysis",
         title="Quantized Output Error Analysis",
         purpose="Decide whether an approximate integer/vector implementation is acceptable using signed interpretation, RMSE, relative RMSE, and correlation.",
@@ -302,48 +373,6 @@ COMPOSABLE_UNIT_SPECS = [
         ),
         verification=("The report includes relative RMSE or another normalized error measure.",),
         related=("bas-char-signed-int8", "matlab-gold-vemu-compare"),
-    ),
-    ComposableUnitSpec(
-        kind="skilllet",
-        slug="vcmxmul-ofdm-experiment-backup",
-        title="VCMXMUL OFDM Experiment Backup",
-        purpose="Keep a logic-correct VCMXMUL experiment available while the default OFDM path remains bit-exact.",
-        keywords=("cmxmul_logic_correct", "CMUL_WN_EXPLICIT_V1_STYLE", "vns_cmxmul", "OFDM", "bit-exact"),
-        min_matches=3,
-        when_to_use=(
-            "A VCMXMUL OFDM experiment should be preserved without making it the default functional path.",
-            "The approximate path compiles but numerical error is too large for normal use.",
-        ),
-        inputs=("default OFDM source", "experiment backup source", "generated assembly"),
-        outputs=("bit-exact default path", "separate experiment backup"),
-        steps=(
-            "Keep the default OFDM macro on explicit vmul/vssub/vsadd operations.",
-            "Save the corrected VCMXMUL operand mapping in a separate backup file.",
-            "Confirm the default generated assembly has no VCMXMUL instruction.",
-        ),
-        verification=("Final output matches baseline and generated VCMXMUL count is zero on the default path.",),
-        related=("vcmxmul-fixed-point-gauss-caveat",),
-    ),
-    ComposableUnitSpec(
-        kind="workflow",
-        slug="cau-cmxmul-8bit-design-review",
-        title="CAU VCMXMUL 8bit Design Review",
-        purpose="Evaluate VCMXMUL hardware alternatives for 8bit precision while preserving CAU reuse.",
-        keywords=("CAU", "raw product", "wide post_adder", "final shift", "VCMXMUL_ACC", "8bit"),
-        min_matches=3,
-        when_to_use=(
-            "A hardware discussion weighs Gauss VCMXMUL reuse against 8bit numerical precision.",
-            "RTL changes are being considered but must not disturb other CAU instructions.",
-        ),
-        inputs=("CAU datapath", "multiplier output width", "post-adder/final saturation behavior"),
-        outputs=("design options", "risk assessment", "verification focus"),
-        steps=(
-            "Separate ordinary VMUL/VMULADD/VADDMUL behavior from VCMXMUL-specific needs.",
-            "Prefer raw product bypass plus wide accumulation if precision matters.",
-            "Keep legacy VCMXMUL behavior stable if RTL compatibility is required.",
-        ),
-        verification=("The review names which ordinary instructions should remain behavior-compatible.",),
-        related=("vcmxmul-fixed-point-gauss-caveat",),
     ),
 ]
 
@@ -472,6 +501,88 @@ def _detect_composable_units(
     ]
 
 
+def _detect_findings(source_text: str) -> list[Finding]:
+    lowered = source_text.lower()
+    findings: list[Finding] = []
+    for spec in FINDING_SPECS:
+        matches = [keyword for keyword in spec.keywords if keyword.lower() in lowered]
+        if len(matches) < spec.min_matches:
+            continue
+        findings.append(
+            Finding(
+                kind=spec.kind,
+                slug=spec.slug,
+                title=spec.title,
+                summary=spec.summary,
+                evidence=_evidence_lines(source_text, spec.keywords),
+                follow_up=spec.follow_up or spec.evidence_hint,
+            )
+        )
+    findings.extend(_heuristic_findings(source_text))
+    return _dedupe_findings(findings)
+
+
+def _heuristic_findings(source_text: str) -> list[Finding]:
+    patterns = [
+        (
+            "todo",
+            "follow-up-todos",
+            "Follow-Up Todos",
+            ("todo", "TODO", "下一步", "后续", "待做", "需要继续"),
+        ),
+        (
+            "idea",
+            "session-ideas",
+            "Session Ideas",
+            ("idea", "灵感", "想法", "可以考虑", "我觉得", "maybe"),
+        ),
+        (
+            "research_note",
+            "research-notes",
+            "Research Notes",
+            ("hypothesis", "experiment", "科研", "假设", "实验", "reference"),
+        ),
+        (
+            "issue",
+            "deferred-issues",
+            "Deferred Issues",
+            ("问题", "失败", "风险", "blocked", "not fixed", "暂时不改"),
+        ),
+    ]
+    findings: list[Finding] = []
+    for kind, slug, title, keywords in patterns:
+        evidence = _evidence_lines(source_text, keywords, limit=5)
+        if len(evidence) < 2:
+            continue
+        findings.append(
+            Finding(
+                kind=kind,
+                slug=slug,
+                title=title,
+                summary=f"Potential {FINDING_TYPE_LABELS[kind].lower()} signals found in the session.",
+                evidence=evidence,
+                follow_up="Review these signals before promoting them to project memory.",
+            )
+        )
+    return findings
+
+
+def _dedupe_findings(findings: list[Finding]) -> list[Finding]:
+    deduped: dict[tuple[str, str], Finding] = {}
+    for finding in findings:
+        key = (finding.kind, finding.slug)
+        existing = deduped.get(key)
+        if not existing:
+            deduped[key] = finding
+            continue
+        deduped[key] = replace(
+            existing,
+            evidence=tuple(dict.fromkeys((*existing.evidence, *finding.evidence))),
+            follow_up=existing.follow_up or finding.follow_up,
+        )
+    return list(deduped.values())
+
+
 def _unit_dir_name(kind: str) -> str:
     if kind == "prompt_pattern":
         return "prompt_patterns"
@@ -551,6 +662,46 @@ def _render_composable_index(session_id: str, units: list[ComposableUnit]) -> st
     ]:
         items = [f"`{unit.slug}` - {unit.title}" for unit in by_kind.get(kind, [])]
         sections.extend(["", f"## {title}", "", markdown_bullets(items)])
+    return "\n".join(sections) + "\n"
+
+
+def _render_finding(finding: Finding, session_id: str) -> str:
+    label = FINDING_TYPE_LABELS.get(finding.kind, finding.kind.title())
+    return f"""# {label}: {finding.title}
+
+Status: candidate
+Type: {finding.kind}
+Session: {session_id}
+
+## Summary
+
+{finding.summary}
+
+## Evidence From Session
+
+{markdown_bullets(finding.evidence)}
+
+## Follow Up
+
+{finding.follow_up or "Review whether this should become knowledge, todo, issue, direction, or skilllet."}
+"""
+
+
+def _render_findings_index(session_id: str, findings: list[Finding]) -> str:
+    by_kind: dict[str, list[Finding]] = {}
+    for finding in findings:
+        by_kind.setdefault(finding.kind, []).append(finding)
+
+    sections = [
+        "# Findings",
+        "",
+        f"Session: {session_id}",
+        "",
+        "Findings are memory candidates that should not automatically become skills.",
+    ]
+    for kind in ["knowledge", "issue", "todo", "idea", "research_note", "direction"]:
+        items = [f"`{finding.slug}` - {finding.title}" for finding in by_kind.get(kind, [])]
+        sections.extend(["", f"## {FINDING_TYPE_PLURALS[kind]}", "", markdown_bullets(items)])
     return "\n".join(sections) + "\n"
 
 
@@ -922,6 +1073,18 @@ def _write_composable_units(
     )
 
 
+def _write_findings(patch_dir: Path, session_id: str, findings: list[Finding]) -> None:
+    directory = patch_dir / "findings"
+    directory.mkdir(parents=True, exist_ok=True)
+    (directory / "index.md").write_text(
+        _render_findings_index(session_id, findings),
+        encoding="utf-8",
+    )
+    for finding in findings:
+        path = directory / f"{finding.kind}__{finding.slug}.md"
+        path.write_text(_render_finding(finding, session_id), encoding="utf-8")
+
+
 def distill_session(project: Path, session_dir: Path | None = None) -> PatchPaths:
     root = project.resolve()
     ensure_workspace(root)
@@ -949,6 +1112,7 @@ def distill_session(project: Path, session_dir: Path | None = None) -> PatchPath
         tests=tests,
     )
     composable_units, merge_suggestions = _resolve_units_with_registry(root, composable_units)
+    findings = _detect_findings(source_text)
     questions = _questions(
         goal=goal,
         outcome=outcome,
@@ -969,6 +1133,8 @@ def distill_session(project: Path, session_dir: Path | None = None) -> PatchPath
         skill_patch=patch_dir / "skill_patch.md",
         agent_rule_patch=patch_dir / "agent_rule_patch.md",
         questions=patch_dir / "questions.md",
+        findings_index=patch_dir / "findings" / "index.md",
+        findings_dir=patch_dir / "findings",
         merge_suggestions=patch_dir / "merge_suggestions.md",
         skilllets_dir=patch_dir / "skilllets",
         prompt_patterns_dir=patch_dir / "prompt_patterns",
@@ -1009,5 +1175,6 @@ def distill_session(project: Path, session_dir: Path | None = None) -> PatchPath
         ),
         encoding="utf-8",
     )
+    _write_findings(patch_dir, session_id, findings)
     _write_composable_units(patch_dir, session_id, composable_units, merge_suggestions)
     return paths

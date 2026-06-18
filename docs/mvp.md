@@ -25,7 +25,7 @@ tool, they can start with:
 vibewiki import-markdown path/to/session.md
 ```
 
-The project receives an approved Wiki note, reusable skilllets/prompt
+The project receives approved findings, a Wiki note, reusable skilllets/prompt
 patterns/workflows, a compatibility Skill draft, and updated agent guidance.
 
 ## v0.1 Commands
@@ -48,6 +48,8 @@ patterns/workflows, a compatibility Skill draft, and updated agent guidance.
 - Imports exported Markdown sessions without requiring an LLM.
 - Splits a long session into multiple composable units when several reusable
   ideas appear.
+- Keeps non-procedural memory as findings: knowledge, issues, todos, ideas,
+  research notes, and directions.
 - Separates candidates from approved knowledge.
 - Produces at least one question when context is missing.
 - Flags incomplete Skill contracts before review.
