@@ -6,12 +6,14 @@ Turn AI coding sessions into reviewed project memory.
 
 AI coding is fast, but the useful knowledge often disappears into chat logs,
 temporary commands, diffs, and test output. VibeWiki captures what actually
-worked, turns it into reviewable Wiki, Skill, and Agent Rule patches, and feeds
-that knowledge back into future development.
+worked, turns it into reviewable Wiki patches, composable skilllets, prompt
+patterns, workflows, and Agent Rule patches, then feeds that knowledge back into
+future development.
 
 In plain words: VibeWiki is a memory layer for AI coding. After Codex, Claude, or
-Cursor helps you fix something, VibeWiki saves the final verified path so the
-next developer or agent can reuse it instead of rediscovering it.
+Cursor helps you fix something, VibeWiki turns the messy conversation into small
+reusable capability units so the next developer or agent can compose them instead
+of rediscovering them.
 
 The first version is intentionally local and conservative:
 
@@ -29,10 +31,17 @@ questions for a human.
 
 ## What It Does
 
-VibeWiki turns one finished coding session into four useful artifacts:
+VibeWiki treats a finished coding session as evidence, not as a skill by itself.
+One session may contain several reusable ideas; several sessions may improve the
+same idea over time.
+
+It creates reviewable artifacts:
 
 - a Wiki note that explains what changed and why
-- a reusable Skill with commands, probes, evidence, and failure modes
+- skilllets: small, composable capability units
+- prompt patterns: reusable prompts and agent task package shapes
+- workflows: larger procedures composed from skilllets
+- a compatibility Skill Patch with commands, probes, evidence, and failure modes
 - Agent Rules for future coding agents
 - clarification questions for anything that is still uncertain
 
@@ -101,6 +110,9 @@ This creates:
   reviews/
 docs/wiki/
 skills/
+  skilllets/
+  prompt_patterns/
+  workflows/
 AGENTS.md
 ```
 
@@ -120,16 +132,17 @@ draft, not as final truth.
 1. Trust beats automation.
 2. Record the final verified path, not every failed attempt.
 3. Keep knowledge out of the main Wiki until a human approves it.
-4. Generate reusable Skills, not just prose documentation.
-5. Validate Skill contracts before they become project guidance.
-6. Treat agent-facing rules as a first-class output.
-7. Start local, then add GitHub PR workflows and retrieval.
+4. Extract small skilllets instead of one oversized session-specific skill.
+5. Let repeated sessions evolve the same skilllet by appending evidence.
+6. Validate Skill contracts before they become project guidance.
+7. Treat agent-facing rules as a first-class output.
+8. Start local, then add GitHub PR workflows and retrieval.
 
 ## Roadmap
 
 - `v0.1`: local CLI and reviewable memory patch workflow
 - `v0.2`: GitHub PR comment workflow
-- `v0.3`: Skill versioning and deprecation
+- `v0.3`: Skilllet versioning, deprecation, and cross-session evolution
 - `v0.4`: Venus/VEMU/gem5/RTL case study
 - `v0.5`: local Markdown retrieval with citations and LLM-Wiki-style search/read
 - `v1.0`: CLI, GitHub Action, docs, examples, and demo video
@@ -146,9 +159,10 @@ See [`docs/research_llm_wiki.md`](docs/research_llm_wiki.md).
 ## Ctx2Skill-Inspired Direction
 
 VibeWiki can also borrow from Ctx2Skill-style skill evolution. The practical
-version is simple: every reusable Skill should include invocation conditions,
+version is simple: every reusable skilllet should include invocation conditions,
 contraindications, probes, evidence, and environment requirements. Later,
-VibeWiki can replay Skill updates against older sessions before promoting them.
+VibeWiki can replay skilllet updates against older sessions before promoting
+them.
 
 See [`docs/research_ctx2skill.md`](docs/research_ctx2skill.md).
 

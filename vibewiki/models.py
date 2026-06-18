@@ -21,10 +21,12 @@ class PatchPaths:
     skill_patch: Path
     agent_rule_patch: Path
     questions: Path
+    skilllets_dir: Path
+    prompt_patterns_dir: Path
+    workflows_dir: Path
 
 
 @dataclass(frozen=True)
 class ReviewPaths:
     session_id: str
     review_file: Path
-

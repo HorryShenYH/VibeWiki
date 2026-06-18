@@ -4,13 +4,24 @@
 
 VibeWiki is a project memory framework for AI coding. It turns successful
 Codex, Claude, Cursor, or Copilot sessions into reviewed Wiki patches,
-reusable Skills, and agent-facing rules.
+composable skilllets, prompt patterns, workflows, and agent-facing rules.
 
 ## Core Loop
 
 ```text
 capture -> distill -> review -> merge -> reuse
 ```
+
+## Core Model
+
+```text
+Session -> Findings -> Skilllets / Prompt Patterns / Workflows -> Review -> Merge
+```
+
+A session is evidence, not a skill. One long session may contain multiple
+purposes and reusable ideas. A reusable skilllet should stay small enough to
+compose with others, and repeated sessions should improve the same skilllet
+rather than creating redundant copies.
 
 ## Inputs
 
@@ -32,7 +43,10 @@ One AI coding session can provide:
 VibeWiki creates candidate patches:
 
 - Knowledge Patch: facts and suggested Wiki updates
-- Skill Patch: repeatable procedure and verification steps
+- Skilllets: small repeatable capability units with evidence and verification
+- Prompt Patterns: reusable prompts and agent task package templates
+- Workflows: larger procedures composed from skilllets and prompt patterns
+- Skill Patch: compatibility review entry point for current tooling
 - Agent Rule Patch: rules for future coding agents
 - Clarifying Questions: missing context before merge
 
@@ -55,7 +69,7 @@ The original plan was broad and exciting, but v0.1 should be narrower:
 - Do not auto-edit the final Wiki.
 
 The first release should prove one thing well: a successful development session
-can become an auditable memory patch that a person can accept or reject.
+can become auditable, composable memory that a person can accept or reject.
 
 ## Non-Goals For v0.1
 
@@ -101,13 +115,13 @@ borrow this after the basic trusted-memory loop works.
 The near-term VibeWiki stance:
 
 ```text
-session evidence -> Skill Patch -> structural validation -> human review
+session evidence -> skilllets / patterns / workflows -> structural validation -> human review
 ```
 
 The later Ctx2Skill-inspired stance:
 
 ```text
-Skill Patch -> probes -> failure analysis -> skill mutation -> cross-session replay -> review
+skilllet -> probes -> failure analysis -> mutation -> cross-session replay -> review
 ```
 
 See `docs/research_ctx2skill.md` for the current notes.

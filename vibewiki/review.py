@@ -52,6 +52,10 @@ def patch_summary(project: Path, patch_dir: Path | None = None) -> str:
         selected_patch_dir / "skill_patch.md",
         selected_patch_dir / "agent_rule_patch.md",
         selected_patch_dir / "questions.md",
+        selected_patch_dir / "composable_units.md",
+        selected_patch_dir / "skilllets",
+        selected_patch_dir / "prompt_patterns",
+        selected_patch_dir / "workflows",
     ]
     lines = [f"Patch directory: {selected_patch_dir}"]
     for path in files:
@@ -62,4 +66,3 @@ def patch_summary(project: Path, patch_dir: Path | None = None) -> str:
 
 def latest_session_id(project: Path) -> str:
     return latest_session_dir(project).name
-

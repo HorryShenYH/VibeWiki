@@ -3,7 +3,7 @@
 ## Goal
 
 Build a local CLI that records one successful AI coding session and converts it
-into reviewed project memory.
+into reviewed, composable project memory.
 
 ## User Story
 
@@ -25,8 +25,8 @@ tool, they can start with:
 vibewiki import-markdown path/to/session.md
 ```
 
-The project receives an approved Wiki note, a reusable Skill draft, and updated
-agent guidance.
+The project receives an approved Wiki note, reusable skilllets/prompt
+patterns/workflows, a compatibility Skill draft, and updated agent guidance.
 
 ## v0.1 Commands
 
@@ -46,6 +46,8 @@ agent guidance.
 - Works without network access.
 - Stores the original session evidence.
 - Imports exported Markdown sessions without requiring an LLM.
+- Splits a long session into multiple composable units when several reusable
+  ideas appear.
 - Separates candidates from approved knowledge.
 - Produces at least one question when context is missing.
 - Flags incomplete Skill contracts before review.
@@ -61,5 +63,5 @@ Use a Venus session:
 - MATLAB gold comparison
 - LDPC benchmark validation
 
-The demo should show that a future agent can read the generated Skill and avoid
-repeating the same mistake.
+The demo should show that a future agent can combine generated skilllets, prompt
+patterns, and workflows instead of repeating the same investigation.

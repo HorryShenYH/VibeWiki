@@ -7,9 +7,44 @@ from .review import latest_patch_dir
 from .text_utils import append_marked_section, read_text_if_exists
 
 
+UNIT_DIRS = {
+    "skilllets": "skilllet",
+    "prompt_patterns": "prompt-pattern",
+    "workflows": "workflow",
+}
+
+
 def _approved(project: Path, session_id: str) -> bool:
     review_file = project / ".vibewiki" / "reviews" / f"{session_id}.yaml"
     return "decision: approved" in read_text_if_exists(review_file)
+
+
+def _merge_unit_dir(root: Path, patch_dir: Path, session_id: str, name: str) -> list[Path]:
+    source_dir = patch_dir / name
+    if not source_dir.exists():
+        return []
+
+    changed: list[Path] = []
+    destination_dir = root / "skills" / name
+    unit_label = UNIT_DIRS[name]
+    for source in sorted(source_dir.glob("*.md")):
+        if source.name == "index.md":
+            continue
+        body = read_text_if_exists(source)
+        if not body:
+            continue
+        slug = source.stem
+        target = destination_dir / source.name
+        marker = f"<!-- vibewiki:{session_id}:{unit_label}:{slug} -->"
+        if append_marked_section(target, marker, body):
+            changed.append(target)
+
+        index = destination_dir / "index.md"
+        index_marker = f"<!-- vibewiki:{unit_label}:{slug}:index -->"
+        index_body = f"- [{slug}]({source.name})"
+        if append_marked_section(index, index_marker, index_body):
+            changed.append(index)
+    return changed
 
 
 def merge_patches(
@@ -47,6 +82,7 @@ def merge_patches(
         changed.append(skill_file)
     if append_marked_section(agents_file, agent_marker, agent_rules):
         changed.append(agents_file)
+    for unit_dir in UNIT_DIRS:
+        changed.extend(_merge_unit_dir(root, selected_patch_dir, session_id, unit_dir))
 
     return changed
-

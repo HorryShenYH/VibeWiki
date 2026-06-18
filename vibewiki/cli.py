@@ -186,6 +186,9 @@ def run(args: argparse.Namespace) -> int:
         print(f"- {paths.skill_patch}")
         print(f"- {paths.agent_rule_patch}")
         print(f"- {paths.questions}")
+        print(f"- {paths.skilllets_dir}")
+        print(f"- {paths.prompt_patterns_dir}")
+        print(f"- {paths.workflows_dir}")
         return 0
 
     if args.subcommand == "import-markdown":

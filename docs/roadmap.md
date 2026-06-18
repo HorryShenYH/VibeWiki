@@ -10,6 +10,7 @@
 - human review record
 - append-only merge
 - import exported session Markdown
+- composable skilllets, prompt patterns, and workflows
 
 ## v0.2: GitHub Pull Request Workflow
 
@@ -19,24 +20,26 @@
 - maintainer approval before docs update
 - validate links, source references, unresolved questions, and evidence status
 
-## v0.3: Skill System
+## v0.3: Skilllet Evolution System
 
-- Skill patch format
-- Skill versioning
-- Skill deprecation
+- Skilllet patch format
+- Skilllet versioning
+- Skilllet deprecation
+- repeated sessions improve existing skilllets by slug
 - generated agent rules
-- reusable project-specific procedures
+- reusable project-specific procedures composed from smaller units
 - `When Not To Use`, probes, evidence, confidence, and environment requirements
-- skill evolution log
+- skilllet evolution log
 
 ## v0.4: Venus Case Study
 
-- VEMU simulation Skill
-- VEMU output mismatch Skill
-- gem5 performance simulation Skill
-- RTL alignment Skill
-- MATLAB gold comparison Skill
-- LDPC benchmark Skill
+- VEMU simulation skilllets
+- VEMU output mismatch skilllets
+- gem5 performance simulation skilllets
+- RTL alignment skilllets
+- MATLAB gold comparison skilllets
+- LDPC benchmark skilllets
+- workflows that compose the smaller units into full verification runs
 - verifier-style probes for DSL build, Emulator run, dump comparison, and generated assembly markers
 
 ## v0.5: Ask
