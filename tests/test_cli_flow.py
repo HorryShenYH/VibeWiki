@@ -242,6 +242,68 @@ For evaluation, compute MAE, RMSE, relative RMSE, correlation, and mismatch.
                 (root / "skills" / "skilllets" / "quantized-output-error-analysis.md").exists()
             )
 
+    def test_distill_product_design_discussion_into_typed_findings(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = root / "vibewiki_design_session.md"
+            source.write_text(
+                """# VibeWiki Product Design Discussion
+
+## Current Assessment
+
+VibeWiki is a usable MVP, but product-design conversations are under-distilled.
+
+## Key Innovation
+
+- Review-first promotion keeps generated memory candidate until a human approves it.
+
+## High Priority Improvements
+
+- Add product/research conversation extraction for decisions, assumptions, tradeoffs, todos, issues, ideas, open questions, and roadmap directions.
+- Add item-level review decisions before merge.
+
+## Known Issues
+
+- Product-design conversations are under-distilled and miss roadmap tradeoffs.
+
+## Ideas
+
+- Keep memory units smaller than a session-sized skill.
+
+## Directions
+
+- Position VibeWiki as a trusted memory compiler for AI conversations.
+
+Example command mention: `vibewiki ask "what changed?"`
+""",
+                encoding="utf-8",
+            )
+
+            session = import_markdown_session(root, source)
+            patches = distill_session(root, session_dir=session.session_dir)
+            findings_index = patches.findings_index.read_text(encoding="utf-8")
+
+            self.assertIn("Add product/research conversation extraction", findings_index)
+            self.assertIn("Add item-level review decisions before merge", findings_index)
+            self.assertIn(
+                "Product-design conversations are under-distilled and miss roadmap tradeoffs",
+                findings_index,
+            )
+            self.assertIn("Keep memory units smaller than a session-sized skill", findings_index)
+            self.assertIn(
+                "Position VibeWiki as a trusted memory compiler for AI conversations",
+                findings_index,
+            )
+            self.assertNotIn("Imported from Markdown source", findings_index)
+            self.assertTrue(any(patches.findings_dir.glob("todo__add-product-research*.md")))
+            self.assertTrue(any(patches.findings_dir.glob("issue__product-design*.md")))
+            self.assertTrue(any(patches.findings_dir.glob("idea__keep-memory*.md")))
+            self.assertTrue(any(patches.findings_dir.glob("direction__position-vibewiki*.md")))
+            generated_skilllets = [
+                path for path in patches.skilllets_dir.glob("*.md") if path.name != "index.md"
+            ]
+            self.assertEqual(generated_skilllets, [])
+
     def test_registry_reuses_existing_skilllet_slug(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

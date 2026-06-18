@@ -16,3 +16,9 @@ Impact: VibeWiki can record the curated backlog manually, but the automatic
 distiller still needs better support for product, research, and daily discussion
 sessions. This is separate from engineering debug sessions, where command and
 evidence heuristics are more naturally structured.
+
+Update on 2026-06-19: partially addressed. The local distiller now extracts
+discussion bullets and section summaries into typed candidate findings, and it
+avoids generating a broad session-sized skilllet for discussion-like sessions.
+Remaining gaps: the rules are still heuristic, item-level review is still
+missing, and LLM-assisted distillation is not implemented yet.

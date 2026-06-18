@@ -139,6 +139,129 @@ FINDING_SPECS = [
 ]
 
 
+DISCUSSION_CUES = (
+    "assumption",
+    "backlog",
+    "decision",
+    "design conversation",
+    "discussion",
+    "idea",
+    "improvement",
+    "open question",
+    "positioning",
+    "research",
+    "roadmap",
+    "tradeoff",
+    "产品",
+    "设计",
+    "讨论",
+    "灵感",
+    "想法",
+    "下一步",
+    "方向",
+    "定位",
+    "科研",
+    "研究",
+)
+
+DISCUSSION_KIND_KEYWORDS = {
+    "issue": (
+        "bug",
+        "caveat",
+        "gap",
+        "known issue",
+        "problem",
+        "risk",
+        "too shallow",
+        "under-distilled",
+        "weak",
+        "问题",
+        "风险",
+        "不足",
+        "不够",
+        "失败",
+        "缺",
+    ),
+    "todo": (
+        "add ",
+        "build ",
+        "clean up",
+        "create ",
+        "fix ",
+        "high priority",
+        "improve ",
+        "implement ",
+        "medium priority",
+        "move ",
+        "needed improvement",
+        "next",
+        "priority",
+        "release readiness",
+        "separate ",
+        "todo",
+        "需要",
+        "下一步",
+        "待做",
+        "改进",
+        "完善",
+        "增加",
+        "实现",
+        "修复",
+    ),
+    "idea": (
+        "could",
+        "idea",
+        "maybe",
+        "spark",
+        "worth",
+        "可以",
+        "也许",
+        "想法",
+        "灵感",
+    ),
+    "research_note": (
+        "assumption",
+        "experiment",
+        "hypothesis",
+        "open question",
+        "research",
+        "tradeoff",
+        "引用",
+        "假设",
+        "实验",
+        "权衡",
+        "科研",
+        "研究",
+    ),
+    "direction": (
+        "direction",
+        "future",
+        "long-term",
+        "position",
+        "positioning",
+        "roadmap",
+        "v0.",
+        "v1.",
+        "方向",
+        "定位",
+        "长期",
+        "路线",
+    ),
+    "knowledge": (
+        "assessment",
+        "distinct",
+        "difference",
+        "innovation",
+        "knowledge",
+        "positioning",
+        "trait",
+        "区别",
+        "不同",
+        "定位",
+    ),
+}
+
+
 COMPOSABLE_UNIT_SPECS = [
     ComposableUnitSpec(
         kind="prompt_pattern",
@@ -482,6 +605,9 @@ def _detect_composable_units(
     if units:
         return units
 
+    if _looks_like_discussion_session(source_text):
+        return []
+
     if not commands:
         return []
 
@@ -521,8 +647,366 @@ def _detect_findings(source_text: str) -> list[Finding]:
                 follow_up=spec.follow_up or spec.evidence_hint,
             )
         )
+    findings.extend(_discussion_findings(source_text))
     findings.extend(_heuristic_findings(source_text))
     return _dedupe_findings(findings)
+
+
+def _looks_like_discussion_session(source_text: str) -> bool:
+    lowered = source_text.lower()
+    score = sum(1 for cue in DISCUSSION_CUES if cue.lower() in lowered)
+    return score >= 2
+
+
+def _iter_discussion_bullets(source_text: str) -> list[tuple[tuple[str, ...], str]]:
+    items: list[tuple[tuple[str, ...], str]] = []
+    heading_stack: list[tuple[int, str]] = []
+    bullet_context: tuple[str, ...] = ()
+    bullet_lines: list[str] = []
+    in_fence = False
+
+    def flush_bullet() -> None:
+        nonlocal bullet_lines, bullet_context
+        if not bullet_lines:
+            return
+        text = _clean_discussion_text(" ".join(bullet_lines))
+        if text:
+            items.append((bullet_context, text))
+        bullet_lines = []
+        bullet_context = ()
+
+    for line in source_text.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("```"):
+            flush_bullet()
+            in_fence = not in_fence
+            continue
+        if in_fence:
+            continue
+
+        heading = re.match(r"^(#{1,6})\s+(.+?)\s*$", stripped)
+        if heading:
+            flush_bullet()
+            level = len(heading.group(1))
+            title = _clean_discussion_text(heading.group(2))
+            heading_stack = [item for item in heading_stack if item[0] < level]
+            heading_stack.append((level, title))
+            continue
+
+        if _looks_like_pseudo_heading(stripped):
+            flush_bullet()
+            level = heading_stack[-1][0] + 1 if heading_stack else 2
+            title = _clean_discussion_text(stripped.rstrip(":："))
+            heading_stack = [item for item in heading_stack if item[0] < level]
+            heading_stack.append((level, title))
+            continue
+
+        bullet = re.match(r"^[-*]\s+(.+?)\s*$", stripped)
+        if bullet:
+            flush_bullet()
+            bullet_context = tuple(title for _level, title in heading_stack)
+            bullet_lines = [bullet.group(1)]
+            continue
+
+        if bullet_lines and stripped:
+            bullet_lines.append(stripped)
+            continue
+
+        flush_bullet()
+
+    flush_bullet()
+    return items
+
+
+def _iter_discussion_sections(source_text: str) -> list[tuple[tuple[str, ...], str, str]]:
+    sections: list[tuple[tuple[str, ...], str, str]] = []
+    heading_stack: list[tuple[int, str]] = []
+    current_context: tuple[str, ...] = ()
+    current_title = ""
+    current_lines: list[str] = []
+    in_fence = False
+
+    def flush_section() -> None:
+        nonlocal current_context, current_title, current_lines
+        if not current_title:
+            return
+        body = _clean_discussion_text(" ".join(current_lines))
+        if body:
+            sections.append((current_context, current_title, body))
+        current_context = ()
+        current_title = ""
+        current_lines = []
+
+    def open_section(level: int, title: str) -> None:
+        nonlocal heading_stack, current_context, current_title, current_lines
+        flush_section()
+        heading_stack = [item for item in heading_stack if item[0] < level]
+        heading_stack.append((level, title))
+        current_context = tuple(item_title for _item_level, item_title in heading_stack)
+        current_title = title
+        current_lines = []
+
+    for line in source_text.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("```"):
+            in_fence = not in_fence
+            continue
+        if in_fence:
+            continue
+
+        heading = re.match(r"^(#{1,6})\s+(.+?)\s*$", stripped)
+        if heading:
+            open_section(len(heading.group(1)), _clean_discussion_text(heading.group(2)))
+            continue
+
+        if _looks_like_pseudo_heading(stripped):
+            level = heading_stack[-1][0] + 1 if heading_stack else 2
+            open_section(level, _clean_discussion_text(stripped.rstrip(":：")))
+            continue
+
+        if not current_title:
+            continue
+        if not stripped or stripped.startswith(("-", "*")):
+            continue
+        current_lines.append(stripped)
+
+    flush_section()
+    return sections
+
+
+def _clean_discussion_text(text: str) -> str:
+    clean = text.strip()
+    clean = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", clean)
+    clean = clean.replace("`", "")
+    clean = re.sub(r"\s+", " ", clean)
+    return clean.strip(" -")
+
+
+def _looks_like_pseudo_heading(stripped: str) -> bool:
+    if not stripped.endswith((":", "：")):
+        return False
+    if len(stripped) > 80:
+        return False
+    lowered = stripped.lower()
+    if lowered.startswith(("http:", "https:")):
+        return False
+    heading_cues = (
+        "direction",
+        "idea",
+        "improvement",
+        "issue",
+        "medium priority",
+        "high priority",
+        "lower priority",
+        "low priority",
+        "needed",
+        "open question",
+        "priority",
+        "research",
+        "todo",
+        "方向",
+        "改进",
+        "灵感",
+        "问题",
+        "下一步",
+        "研究",
+    )
+    return any(cue in lowered for cue in heading_cues)
+
+
+def _discussion_finding_kind(context: tuple[str, ...], item: str) -> str:
+    lowered_context = " ".join(context).lower()
+    lowered_item = item.lower()
+    haystack = f"{lowered_context} {lowered_item}"
+
+    explicit = _explicit_context_kind(context)
+    if explicit:
+        return explicit
+    if _contains_any(haystack, DISCUSSION_KIND_KEYWORDS["issue"]):
+        return "issue"
+    if (
+        _contains_any(haystack, DISCUSSION_KIND_KEYWORDS["todo"])
+        or _looks_actionable_item(lowered_item)
+    ):
+        return "todo"
+    if _contains_any(haystack, DISCUSSION_KIND_KEYWORDS["idea"]):
+        return "idea"
+    if _contains_any(haystack, DISCUSSION_KIND_KEYWORDS["research_note"]):
+        return "research_note"
+    if _contains_any(haystack, DISCUSSION_KIND_KEYWORDS["direction"]):
+        return "direction"
+    if _contains_any(haystack, DISCUSSION_KIND_KEYWORDS["knowledge"]):
+        return "knowledge"
+    return "idea"
+
+
+def _explicit_context_kind(context: tuple[str, ...]) -> str:
+    explicit_rules = [
+        ("issue", ("known issue", "issues", "risks", "problems", "问题", "风险")),
+        ("todo", ("todo", "todos", "priority", "improvement", "next", "待做", "下一步", "改进")),
+        ("idea", ("idea", "ideas", "sparks", "灵感", "想法")),
+        ("research_note", ("research note", "research notes", "research", "科研", "研究")),
+        ("direction", ("direction", "directions", "roadmap", "future", "方向", "路线")),
+        ("knowledge", ("knowledge", "assessment", "innovation", "positioning", "定位")),
+    ]
+    for heading in reversed(context[1:] or context):
+        lowered_heading = heading.lower()
+        for kind, keywords in explicit_rules:
+            if _contains_any(lowered_heading, keywords):
+                return kind
+    return ""
+
+
+def _contains_any(text: str, needles: tuple[str, ...]) -> bool:
+    return any(needle.lower() in text for needle in needles)
+
+
+def _looks_actionable_item(lowered_item: str) -> bool:
+    action_prefixes = (
+        "add ",
+        "build ",
+        "clean ",
+        "create ",
+        "export ",
+        "improve ",
+        "keep ",
+        "make ",
+        "move ",
+        "record ",
+        "separate ",
+        "support ",
+        "use ",
+        "增加",
+        "修复",
+        "实现",
+        "支持",
+        "改进",
+        "记录",
+    )
+    return lowered_item.startswith(action_prefixes)
+
+
+def _discussion_title(item: str) -> str:
+    title = re.split(r"[:.;。；]", item, maxsplit=1)[0].strip()
+    if len(title) > 90:
+        title = title[:87].rstrip() + "..."
+    return title or "Discussion Finding"
+
+
+def _discussion_summary(kind: str, item: str) -> str:
+    label = FINDING_TYPE_LABELS.get(kind, kind).lower()
+    return f"Candidate {label} extracted from a product, research, or daily discussion: {item}"
+
+
+def _section_finding_kind(context: tuple[str, ...], title: str, body: str) -> str:
+    lowered_body = body.lower()
+    haystack = f"{' '.join(context).lower()} {title.lower()} {lowered_body}"
+    explicit = _explicit_context_kind(context)
+    if explicit in {"knowledge", "direction", "idea", "research_note"}:
+        return explicit
+    if _contains_any(haystack, DISCUSSION_KIND_KEYWORDS["issue"]):
+        return "issue"
+    if _contains_any(haystack, DISCUSSION_KIND_KEYWORDS["todo"]):
+        return "todo"
+    if explicit:
+        return explicit
+    if _contains_any(haystack, DISCUSSION_KIND_KEYWORDS["research_note"]):
+        return "research_note"
+    if _contains_any(haystack, DISCUSSION_KIND_KEYWORDS["direction"]):
+        return "direction"
+    return "knowledge"
+
+
+def _discussion_findings(source_text: str) -> list[Finding]:
+    if not _looks_like_discussion_session(source_text):
+        return []
+
+    findings: list[Finding] = []
+    seen_slugs: set[tuple[str, str]] = set()
+    per_kind_counts: dict[str, int] = {}
+
+    for context, title, body in _iter_discussion_sections(source_text):
+        if _skip_discussion_context(context):
+            continue
+        if len(context) <= 1:
+            continue
+        if len(body) < 40 or title.lower() in {"session record"}:
+            continue
+        kind = _section_finding_kind(context, title, body)
+        count = per_kind_counts.get(kind, 0) + 1
+        if count > 20:
+            continue
+        per_kind_counts[kind] = count
+        slug = slugify(title, fallback=f"{kind}-{count}")
+        key = (kind, slug)
+        if key in seen_slugs:
+            continue
+        seen_slugs.add(key)
+        evidence = f"{' > '.join(context)}: {body[:260]}"
+        findings.append(
+            Finding(
+                kind=kind,
+                slug=slug,
+                title=title,
+                summary=_discussion_summary(kind, f"{title}: {body}"),
+                evidence=(evidence,),
+                follow_up="Review whether this discussion section should be promoted, edited, merged, or discarded.",
+            )
+        )
+
+    for context, item in _iter_discussion_bullets(source_text):
+        if _skip_discussion_context(context):
+            continue
+        if len(item) < 12 or item.lower() == "not provided.":
+            continue
+        kind = _discussion_finding_kind(context, item)
+        count = per_kind_counts.get(kind, 0) + 1
+        if count > 20:
+            continue
+        per_kind_counts[kind] = count
+
+        title = _discussion_title(item)
+        slug = slugify(title, fallback=f"{kind}-{count}")
+        key = (kind, slug)
+        if key in seen_slugs:
+            continue
+        seen_slugs.add(key)
+
+        context_label = " > ".join(context)
+        evidence = f"{context_label}: {item}" if context_label else item
+        findings.append(
+            Finding(
+                kind=kind,
+                slug=slug,
+                title=title,
+                summary=_discussion_summary(kind, item),
+                evidence=(evidence,),
+                follow_up="Review whether this discussion item should be promoted, edited, merged, or discarded.",
+            )
+        )
+
+    return findings
+
+
+def _skip_discussion_context(context: tuple[str, ...]) -> bool:
+    ignored = (
+        "ai conversation summary",
+        "ai summary",
+        "benchmark results",
+        "changed files",
+        "files changed",
+        "final outcome",
+        "git status",
+        "goal",
+        "key commands",
+        "recent commit",
+        "tests / verification",
+        "things not to record",
+        "user notes",
+        "verified evidence",
+    )
+    lowered = " > ".join(context).lower()
+    return any(value in lowered for value in ignored)
 
 
 def _heuristic_findings(source_text: str) -> list[Finding]:
@@ -1056,6 +1540,7 @@ def _write_composable_units(
     for name in ["skilllets", "prompt_patterns", "workflows"]:
         directory = patch_dir / name
         directory.mkdir(parents=True, exist_ok=True)
+        _clear_generated_markdown(directory)
         (directory / "index.md").write_text(
             f"# {name.replace('_', ' ').title()}\n\nGenerated from session `{session_id}`.\n",
             encoding="utf-8",
@@ -1079,6 +1564,7 @@ def _write_composable_units(
 def _write_findings(patch_dir: Path, session_id: str, findings: list[Finding]) -> None:
     directory = patch_dir / "findings"
     directory.mkdir(parents=True, exist_ok=True)
+    _clear_generated_markdown(directory)
     (directory / "index.md").write_text(
         _render_findings_index(session_id, findings),
         encoding="utf-8",
@@ -1086,6 +1572,11 @@ def _write_findings(patch_dir: Path, session_id: str, findings: list[Finding]) -
     for finding in findings:
         path = directory / f"{finding.kind}__{finding.slug}.md"
         path.write_text(_render_finding(finding, session_id), encoding="utf-8")
+
+
+def _clear_generated_markdown(directory: Path) -> None:
+    for path in directory.glob("*.md"):
+        path.unlink()
 
 
 def distill_session(project: Path, session_dir: Path | None = None) -> PatchPaths:

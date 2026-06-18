@@ -10,8 +10,10 @@ sessions.
   selected units, merge them, then answer questions with `ask` and generate
   compact agent context with `context`.
 - Separate generic distillation logic from domain-specific Venus/VEMU rules.
-- Add product and research conversation extraction for decisions, assumptions,
-  tradeoffs, todos, issues, ideas, open questions, and roadmap directions.
+- Continue improving product and research conversation extraction for decisions,
+  assumptions, tradeoffs, todos, issues, ideas, open questions, and roadmap
+  directions. The first local heading/bullet heuristic is implemented; next
+  steps are better precision, LLM-assisted distillation, and review controls.
 - Add optional LLM-assisted distillation while keeping deterministic local
   heuristics as the fallback.
 - Add item-level review decisions: approve, reject, defer, downgrade to

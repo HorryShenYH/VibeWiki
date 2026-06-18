@@ -62,8 +62,9 @@ Needed improvements:
 
 - separate generic distillation logic from domain rule packs
 - make Venus/VEMU rules an example pack or plugin
-- add product/research conversation extraction for decisions, assumptions,
-  tradeoffs, open questions, and roadmap items
+- continue product/research conversation extraction for decisions, assumptions,
+  tradeoffs, open questions, and roadmap items. A first local heading/bullet
+  heuristic exists, but precision, LLM support, and review controls remain open.
 - add optional LLM distillation for better findings, skilllets, questions, and
   merge suggestions
 - keep local heuristics as fallback
