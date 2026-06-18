@@ -11,6 +11,7 @@
 - append-only merge
 - import exported session Markdown
 - composable skilllets, prompt patterns, and workflows
+- skill registry for exact slug/alias reuse and reviewed merge suggestions
 
 ## v0.2: GitHub Pull Request Workflow
 
@@ -26,6 +27,7 @@
 - Skilllet versioning
 - Skilllet deprecation
 - repeated sessions improve existing skilllets by slug
+- aliases and registry metadata for controlled cross-session merging
 - generated agent rules
 - reusable project-specific procedures composed from smaller units
 - `When Not To Use`, probes, evidence, confidence, and environment requirements

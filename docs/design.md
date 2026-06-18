@@ -23,6 +23,27 @@ purposes and reusable ideas. A reusable skilllet should stay small enough to
 compose with others, and repeated sessions should improve the same skilllet
 rather than creating redundant copies.
 
+## Skill Registry
+
+Approved units are indexed in `.vibewiki/skill_registry.yaml` with:
+
+- canonical slug
+- kind
+- title
+- aliases
+- keywords
+- evidence sessions
+- status
+
+Distillation uses the registry before writing patches:
+
+- exact slug or alias match: update the existing unit
+- strong keyword overlap: write a merge suggestion for human review
+- no match: create a new candidate unit
+
+The registry is intentionally conservative. It should prevent obvious duplicate
+skilllets without silently merging two concepts that only look similar.
+
 ## Inputs
 
 One AI coding session can provide:

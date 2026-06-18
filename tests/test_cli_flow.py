@@ -25,6 +25,7 @@ class VibeWikiFlowTest(unittest.TestCase):
             self.assertTrue((root / "skills" / "skilllets" / "index.md").exists())
             self.assertTrue((root / "skills" / "prompt_patterns" / "index.md").exists())
             self.assertTrue((root / "skills" / "workflows" / "index.md").exists())
+            self.assertTrue((root / ".vibewiki" / "skill_registry.yaml").exists())
 
             session = capture_session(
                 root,
@@ -40,6 +41,7 @@ class VibeWikiFlowTest(unittest.TestCase):
             self.assertTrue(patches.knowledge_patch.exists())
             self.assertTrue(patches.skill_patch.exists())
             self.assertTrue(patches.agent_rule_patch.exists())
+            self.assertTrue(patches.merge_suggestions.exists())
             self.assertTrue((patches.skilllets_dir / "fix-simulator-mismatch.md").exists())
             self.assertIn("Which test", patches.questions.read_text(encoding="utf-8"))
             skill_text = patches.skill_patch.read_text(encoding="utf-8")
@@ -60,6 +62,10 @@ class VibeWikiFlowTest(unittest.TestCase):
             self.assertIn(root / "AGENTS.md", changed)
             self.assertTrue((root / "skills" / f"{session.session_id}.md").exists())
             self.assertTrue((root / "skills" / "skilllets" / "fix-simulator-mismatch.md").exists())
+            self.assertIn(
+                "fix-simulator-mismatch",
+                (root / ".vibewiki" / "skill_registry.yaml").read_text(encoding="utf-8"),
+            )
 
     def test_skill_validation_requires_sections(self) -> None:
         report = validate_skill_text(
@@ -177,6 +183,39 @@ QPSK:   max_abs_diff=0 bad_abs_gt_1=0
                 "MATLAB NR Demod Reference",
                 merged.read_text(encoding="utf-8"),
             )
+
+    def test_registry_reuses_existing_skilllet_slug(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+
+            first = capture_session(
+                root,
+                goal="First VEMU compare",
+                outcome="Compared VEMU output against MATLAB gold",
+                tests="max_abs_diff=0\nbad_abs_gt_1=0\nMATLAB gold matched VEMU output log",
+            )
+            first_patches = distill_session(root, session_dir=first.session_dir)
+            review_patches(root, patch_dir=first_patches.patch_dir, approve=True)
+            merge_patches(root, patch_dir=first_patches.patch_dir)
+
+            source = root / "second_session.md"
+            source.write_text(
+                """# Second VEMU Error Check
+
+Another task compared a VEMU output log against reference data.
+It reports `max_abs_diff=1` and `bad_abs_gt_1=0`, so it should update
+the existing comparison skilllet instead of creating a session-specific clone.
+""",
+                encoding="utf-8",
+            )
+
+            second = import_markdown_session(root, source)
+            second_patches = distill_session(root, session_dir=second.session_dir)
+            self.assertTrue(
+                (second_patches.skilllets_dir / "matlab-gold-vemu-compare.md").exists()
+            )
+            suggestions = second_patches.merge_suggestions.read_text(encoding="utf-8")
+            self.assertIn("will update existing `matlab-gold-vemu-compare`", suggestions)
 
     def test_import_markdown_does_not_treat_paths_as_commands(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

@@ -48,6 +48,11 @@ It creates reviewable artifacts:
 The important bit: it keeps raw evidence, asks for human approval, and only then
 merges knowledge into the project.
 
+When approved units are merged, VibeWiki updates `.vibewiki/skill_registry.yaml`.
+Later sessions use that registry to update existing skilllets by exact slug or
+alias instead of creating duplicates. Lower-confidence keyword overlap becomes a
+merge suggestion for review rather than an automatic merge.
+
 ## Why This Exists
 
 AI coding agents are powerful, but they forget project-specific lessons:
@@ -105,6 +110,7 @@ This creates:
 ```text
 .vibewiki/
   config.yaml
+  skill_registry.yaml
   sessions/
   patches/
   reviews/

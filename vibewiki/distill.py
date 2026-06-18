@@ -1,11 +1,18 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 import re
 from pathlib import Path
 
 from .models import PatchPaths
 from .project import ensure_workspace
+from .registry import (
+    match_registry,
+    read_registry,
+    registry_path,
+    render_merge_suggestions,
+    unit_keywords,
+)
 from .text_utils import markdown_bullets, read_text_if_exists, slugify
 
 
@@ -233,6 +240,111 @@ COMPOSABLE_UNIT_SPECS = [
         verification=("Each target modulation passes the MATLAB gold comparison without register/resource growth.",),
         related=("matlab-gold-vemu-compare",),
     ),
+    ComposableUnitSpec(
+        kind="skilllet",
+        slug="venus-vcmxmul-rtl-vemu-consistency",
+        title="Venus VCMXMUL RTL VEMU Consistency",
+        purpose="Compare the Venus VCMXMUL RTL path with the VEMU instruction model without confusing it with DFE complex arrays.",
+        keywords=("VCMXMUL", "RTL", "VEMU", "venus_ext.cpp", "venus_cau.sv"),
+        min_matches=3,
+        when_to_use=(
+            "A task asks whether complex multiply behavior matches between RTL and VEMU.",
+            "The repository also contains unrelated DFE complex multiply hardware that could be mistaken for the Venus instruction.",
+        ),
+        inputs=("RTL CAU files", "VEMU `venus_ext.cpp`", "instruction dump or notes"),
+        outputs=("formula mapping", "file-level implementation path", "semantic mismatch notes"),
+        steps=(
+            "Identify the Venus extension implementation path before comparing formulas.",
+            "Map VCMXMUL operands A/B/C/D to RTL and VEMU names.",
+            "Check shift, saturation, mask, and writeback timing details.",
+        ),
+        verification=("RTL and VEMU formulas and writeback roles are explained with file evidence.",),
+        related=("vcmxmul-fixed-point-gauss-caveat",),
+    ),
+    ComposableUnitSpec(
+        kind="skilllet",
+        slug="vcmxmul-fixed-point-gauss-caveat",
+        title="VCMXMUL Fixed Point Gauss Caveat",
+        purpose="Remember that Gauss-style three-multiply VCMXMUL is algebraically valid but not bit-exact to explicit fixed-point complex multiply.",
+        keywords=("C*(A-B)", "B*(C-D)", "bit-exact", "截断", "饱和", "Gauss"),
+        min_matches=3,
+        when_to_use=(
+            "A fused VCMXMUL replacement produces different OFDM or FFT results.",
+            "Someone assumes algebraic equivalence implies fixed-point equivalence.",
+        ),
+        inputs=("explicit vmul/add-sub path", "VCMXMUL path", "shift and saturation settings"),
+        outputs=("root-cause explanation", "safe replacement guidance"),
+        steps=(
+            "Compare where each path shifts, truncates, and saturates.",
+            "Inspect whether pre-add terms such as A-B and C-D change dynamic range.",
+            "Avoid replacing long fixed-point FFT chains with Gauss VCMXMUL without error measurement.",
+        ),
+        verification=("A local example shows the fused and explicit paths diverge under fixed-point arithmetic.",),
+        related=("quantized-output-error-analysis", "venus-vcmxmul-rtl-vemu-consistency"),
+    ),
+    ComposableUnitSpec(
+        kind="skilllet",
+        slug="quantized-output-error-analysis",
+        title="Quantized Output Error Analysis",
+        purpose="Decide whether an approximate integer/vector implementation is acceptable using signed interpretation, RMSE, relative RMSE, and correlation.",
+        keywords=("MAE", "RMSE", "relative RMSE", "correlation", "mismatch", "within ±2"),
+        min_matches=3,
+        when_to_use=(
+            "A change is allowed to be approximate and needs a numerical accept/reject decision.",
+            "The output is quantized and may require signed byte interpretation before statistics.",
+        ),
+        inputs=("baseline output", "candidate output", "signedness convention"),
+        outputs=("mismatch rate", "MAE", "RMSE", "relative RMSE", "correlation"),
+        steps=(
+            "Regenerate baseline and candidate outputs from clean runs.",
+            "Interpret quantized bytes with the correct signedness.",
+            "Compute aggregate statistics and reject changes whose error is signal-sized.",
+        ),
+        verification=("The report includes relative RMSE or another normalized error measure.",),
+        related=("bas-char-signed-int8", "matlab-gold-vemu-compare"),
+    ),
+    ComposableUnitSpec(
+        kind="skilllet",
+        slug="vcmxmul-ofdm-experiment-backup",
+        title="VCMXMUL OFDM Experiment Backup",
+        purpose="Keep a logic-correct VCMXMUL experiment available while the default OFDM path remains bit-exact.",
+        keywords=("cmxmul_logic_correct", "CMUL_WN_EXPLICIT_V1_STYLE", "vns_cmxmul", "OFDM", "bit-exact"),
+        min_matches=3,
+        when_to_use=(
+            "A VCMXMUL OFDM experiment should be preserved without making it the default functional path.",
+            "The approximate path compiles but numerical error is too large for normal use.",
+        ),
+        inputs=("default OFDM source", "experiment backup source", "generated assembly"),
+        outputs=("bit-exact default path", "separate experiment backup"),
+        steps=(
+            "Keep the default OFDM macro on explicit vmul/vssub/vsadd operations.",
+            "Save the corrected VCMXMUL operand mapping in a separate backup file.",
+            "Confirm the default generated assembly has no VCMXMUL instruction.",
+        ),
+        verification=("Final output matches baseline and generated VCMXMUL count is zero on the default path.",),
+        related=("vcmxmul-fixed-point-gauss-caveat",),
+    ),
+    ComposableUnitSpec(
+        kind="workflow",
+        slug="cau-cmxmul-8bit-design-review",
+        title="CAU VCMXMUL 8bit Design Review",
+        purpose="Evaluate VCMXMUL hardware alternatives for 8bit precision while preserving CAU reuse.",
+        keywords=("CAU", "raw product", "wide post_adder", "final shift", "VCMXMUL_ACC", "8bit"),
+        min_matches=3,
+        when_to_use=(
+            "A hardware discussion weighs Gauss VCMXMUL reuse against 8bit numerical precision.",
+            "RTL changes are being considered but must not disturb other CAU instructions.",
+        ),
+        inputs=("CAU datapath", "multiplier output width", "post-adder/final saturation behavior"),
+        outputs=("design options", "risk assessment", "verification focus"),
+        steps=(
+            "Separate ordinary VMUL/VMULADD/VADDMUL behavior from VCMXMUL-specific needs.",
+            "Prefer raw product bypass plus wide accumulation if precision matters.",
+            "Keep legacy VCMXMUL behavior stable if RTL compatibility is required.",
+        ),
+        verification=("The review names which ordinary instructions should remain behavior-compatible.",),
+        related=("vcmxmul-fixed-point-gauss-caveat",),
+    ),
 ]
 
 
@@ -440,6 +552,76 @@ def _render_composable_index(session_id: str, units: list[ComposableUnit]) -> st
         items = [f"`{unit.slug}` - {unit.title}" for unit in by_kind.get(kind, [])]
         sections.extend(["", f"## {title}", "", markdown_bullets(items)])
     return "\n".join(sections) + "\n"
+
+
+def _unit_match_keywords(unit: ComposableUnit) -> tuple[str, ...]:
+    return unit_keywords(
+        unit.title,
+        unit.purpose,
+        "\n".join(unit.inputs),
+        "\n".join(unit.outputs),
+        "\n".join(unit.steps),
+        "\n".join(unit.verification),
+        "\n".join(unit.evidence),
+    )
+
+
+def _resolve_units_with_registry(
+    project: Path,
+    units: list[ComposableUnit],
+) -> tuple[list[ComposableUnit], list[str]]:
+    entries = read_registry(registry_path(project))
+    if not entries:
+        return units, []
+
+    resolved: list[ComposableUnit] = []
+    suggestions: list[str] = []
+    for unit in units:
+        keywords = _unit_match_keywords(unit)
+        match = match_registry(
+            entries,
+            kind=unit.kind,
+            proposed_slug=unit.slug,
+            title=unit.title,
+            keywords=keywords,
+        )
+        if match and match.reuse:
+            target = entries[match.slug]
+            resolved.append(
+                replace(
+                    unit,
+                    slug=target.slug,
+                    title=target.title or unit.title,
+                )
+            )
+            suggestions.append(
+                f"`{unit.slug}` will update existing `{target.slug}` ({match.reason}, score {match.score})."
+            )
+        elif match:
+            resolved.append(unit)
+            suggestions.append(
+                f"`{unit.slug}` may overlap existing `{match.slug}` ({match.reason}, score {match.score}); review whether to merge or keep separate."
+            )
+        else:
+            resolved.append(unit)
+    return _dedupe_units(resolved), suggestions
+
+
+def _dedupe_units(units: list[ComposableUnit]) -> list[ComposableUnit]:
+    deduped: dict[tuple[str, str], ComposableUnit] = {}
+    for unit in units:
+        key = (unit.kind, unit.slug)
+        existing = deduped.get(key)
+        if not existing:
+            deduped[key] = unit
+            continue
+        deduped[key] = replace(
+            existing,
+            evidence=tuple(dict.fromkeys((*existing.evidence, *unit.evidence))),
+            related=tuple(dict.fromkeys((*existing.related, *unit.related))),
+            verification=tuple(dict.fromkeys((*existing.verification, *unit.verification))),
+        )
+    return list(deduped.values())
 
 
 def _parameter_hints(diff: str) -> list[str]:
@@ -711,7 +893,12 @@ Session: {session_id}
 """
 
 
-def _write_composable_units(patch_dir: Path, session_id: str, units: list[ComposableUnit]) -> None:
+def _write_composable_units(
+    patch_dir: Path,
+    session_id: str,
+    units: list[ComposableUnit],
+    suggestions: list[str],
+) -> None:
     for name in ["skilllets", "prompt_patterns", "workflows"]:
         directory = patch_dir / name
         directory.mkdir(parents=True, exist_ok=True)
@@ -727,6 +914,10 @@ def _write_composable_units(patch_dir: Path, session_id: str, units: list[Compos
 
     (patch_dir / "composable_units.md").write_text(
         _render_composable_index(session_id, units),
+        encoding="utf-8",
+    )
+    (patch_dir / "merge_suggestions.md").write_text(
+        render_merge_suggestions(session_id, suggestions),
         encoding="utf-8",
     )
 
@@ -757,6 +948,7 @@ def distill_session(project: Path, session_dir: Path | None = None) -> PatchPath
         commands=commands,
         tests=tests,
     )
+    composable_units, merge_suggestions = _resolve_units_with_registry(root, composable_units)
     questions = _questions(
         goal=goal,
         outcome=outcome,
@@ -777,6 +969,7 @@ def distill_session(project: Path, session_dir: Path | None = None) -> PatchPath
         skill_patch=patch_dir / "skill_patch.md",
         agent_rule_patch=patch_dir / "agent_rule_patch.md",
         questions=patch_dir / "questions.md",
+        merge_suggestions=patch_dir / "merge_suggestions.md",
         skilllets_dir=patch_dir / "skilllets",
         prompt_patterns_dir=patch_dir / "prompt_patterns",
         workflows_dir=patch_dir / "workflows",
@@ -816,5 +1009,5 @@ def distill_session(project: Path, session_dir: Path | None = None) -> PatchPath
         ),
         encoding="utf-8",
     )
-    _write_composable_units(patch_dir, session_id, composable_units)
+    _write_composable_units(patch_dir, session_id, composable_units, merge_suggestions)
     return paths

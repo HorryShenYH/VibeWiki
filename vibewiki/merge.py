@@ -3,6 +3,14 @@ from __future__ import annotations
 from pathlib import Path
 
 from .project import ensure_workspace
+from .registry import (
+    ensure_registry,
+    extract_unit_metadata,
+    merge_registry_entry,
+    read_registry,
+    registry_path,
+    write_registry,
+)
 from .review import latest_patch_dir
 from .text_utils import append_marked_section, read_text_if_exists
 
@@ -19,7 +27,13 @@ def _approved(project: Path, session_id: str) -> bool:
     return "decision: approved" in read_text_if_exists(review_file)
 
 
-def _merge_unit_dir(root: Path, patch_dir: Path, session_id: str, name: str) -> list[Path]:
+def _merge_unit_dir(
+    root: Path,
+    patch_dir: Path,
+    session_id: str,
+    name: str,
+    registry_entries: dict,
+) -> list[Path]:
     source_dir = patch_dir / name
     if not source_dir.exists():
         return []
@@ -34,10 +48,19 @@ def _merge_unit_dir(root: Path, patch_dir: Path, session_id: str, name: str) -> 
         if not body:
             continue
         slug = source.stem
+        kind, title, keywords = extract_unit_metadata(body, slug)
         target = destination_dir / source.name
         marker = f"<!-- vibewiki:{session_id}:{unit_label}:{slug} -->"
         if append_marked_section(target, marker, body):
             changed.append(target)
+        merge_registry_entry(
+            registry_entries,
+            slug=slug,
+            kind=kind,
+            title=title,
+            keywords=keywords,
+            session_id=session_id,
+        )
 
         index = destination_dir / "index.md"
         index_marker = f"<!-- vibewiki:{unit_label}:{slug}:index -->"
@@ -66,6 +89,9 @@ def merge_patches(
     knowledge = read_text_if_exists(selected_patch_dir / "knowledge_patch.md")
     skill = read_text_if_exists(selected_patch_dir / "skill_patch.md")
     agent_rules = read_text_if_exists(selected_patch_dir / "agent_rule_patch.md")
+    registry_file = ensure_registry(root)
+    registry_before = read_text_if_exists(registry_file)
+    registry_entries = read_registry(registry_path(root))
 
     changed: list[Path] = []
     knowledge_marker = f"<!-- vibewiki:{session_id}:knowledge -->"
@@ -83,6 +109,9 @@ def merge_patches(
     if append_marked_section(agents_file, agent_marker, agent_rules):
         changed.append(agents_file)
     for unit_dir in UNIT_DIRS:
-        changed.extend(_merge_unit_dir(root, selected_patch_dir, session_id, unit_dir))
+        changed.extend(_merge_unit_dir(root, selected_patch_dir, session_id, unit_dir, registry_entries))
+    write_registry(registry_file, registry_entries)
+    if read_text_if_exists(registry_file) != registry_before:
+        changed.append(registry_file)
 
     return changed

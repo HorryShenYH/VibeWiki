@@ -186,6 +186,7 @@ def run(args: argparse.Namespace) -> int:
         print(f"- {paths.skill_patch}")
         print(f"- {paths.agent_rule_patch}")
         print(f"- {paths.questions}")
+        print(f"- {paths.merge_suggestions}")
         print(f"- {paths.skilllets_dir}")
         print(f"- {paths.prompt_patterns_dir}")
         print(f"- {paths.workflows_dir}")

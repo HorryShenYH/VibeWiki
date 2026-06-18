@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from .registry import REGISTRY_TEMPLATE
 from .text_utils import write_text_if_allowed
 
 
@@ -104,6 +105,7 @@ def init_project(project: Path, force: bool = False) -> list[Path]:
 
     files = {
         root / ".vibewiki" / "config.yaml": CONFIG_TEMPLATE.format(project_name=root.name),
+        root / ".vibewiki" / "skill_registry.yaml": REGISTRY_TEMPLATE,
         root / "docs" / "wiki" / "index.md": WIKI_INDEX,
         root / "docs" / "wiki" / "development_notes.md": DEVELOPMENT_NOTES,
         root / "docs" / "wiki" / "known_issues.md": KNOWN_ISSUES,
@@ -126,3 +128,13 @@ def ensure_workspace(project: Path) -> None:
     required = root / ".vibewiki"
     if not required.exists():
         init_project(root)
+        return
+    for directory in [
+        root / "skills" / "skilllets",
+        root / "skills" / "prompt_patterns",
+        root / "skills" / "workflows",
+    ]:
+        directory.mkdir(parents=True, exist_ok=True)
+    registry = root / ".vibewiki" / "skill_registry.yaml"
+    if not registry.exists():
+        registry.write_text(REGISTRY_TEMPLATE, encoding="utf-8")
