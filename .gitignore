@@ -19,5 +19,6 @@ dist/
 .vibewiki/sessions/
 .vibewiki/patches/
 .vibewiki/reviews/
+.vibewiki/cache/
 
 VibeWiki 项目计划.pdf

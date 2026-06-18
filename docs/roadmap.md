@@ -13,6 +13,8 @@
 - typed findings for knowledge, issues, todos, ideas, research notes, and directions
 - composable skilllets, prompt patterns, and workflows
 - skill registry for exact slug/alias reuse and reviewed merge suggestions
+- local search, ask, and compact agent context packs
+- optional OpenAI-compatible LLM and embedding APIs with local embedding cache
 
 ## v0.2: GitHub Pull Request Workflow
 
@@ -45,11 +47,11 @@
 - workflows that compose the smaller units into full verification runs
 - verifier-style probes for DSL build, Emulator run, dump comparison, and generated assembly markers
 
-## v0.5: Ask
+## v0.5: Advanced Ask And Retrieval
 
-- local Markdown retrieval
-- cited answers
-- no vector database required at first
+- richer local Markdown retrieval
+- cited answers with source sections
+- no vector database required by default
 - optional Chroma/Qdrant integration later
 - LLM-Wiki-style `wiki_search` and `wiki_read` surfaces
 - Ctx2Skill-inspired cross-session replay before promoting skill updates

@@ -26,6 +26,9 @@ The first version is intentionally local and conservative:
 - `vibewiki validate-skill` checks Skill Patch quality gates.
 - `vibewiki review` records human approval.
 - `vibewiki merge` appends approved patches to docs, skills, and agent rules.
+- `vibewiki ask` answers human questions from approved and candidate memory.
+- `vibewiki context` emits compact YAML/JSON context packs for AI agents.
+- `vibewiki search` inspects the retrieved evidence directly.
 
 VibeWiki does not directly mutate your main knowledge base before review. Facts
 start as candidates, uncertain claims stay marked, and missing context becomes
@@ -164,6 +167,58 @@ draft, not as final truth.
 groups findings, candidate skilllets, prompt patterns, workflows, open
 questions, merge suggestions, and approve/merge commands into one page so review
 does not require opening a directory full of Markdown files one by one.
+
+## Reuse Memory
+
+VibeWiki has two reuse entrances:
+
+```bash
+vibewiki ask "CloudRIC 能不能说比传统基站省电？"
+vibewiki context --for "debug VCMXMUL mismatch"
+```
+
+`ask` is for humans. It searches approved memory and candidate patches, then
+answers with evidence. If an OpenAI-compatible LLM API is configured, VibeWiki
+uses it to write a concise answer. Otherwise it returns a retrieval-based answer
+draft with source snippets.
+
+`context` is for AI agents. It returns a compact, machine-readable context pack
+so a coding agent can start with relevant facts, skills, warnings, and sources
+instead of making the user rewrite a long prompt:
+
+```bash
+vibewiki context --for "run VEMU F5" --format json --max-items 5 --max-chars 500
+```
+
+`search` shows the raw ranked evidence:
+
+```bash
+vibewiki search "VEMU F5 TARGET_DAG"
+```
+
+Search covers both reviewed memory and unreviewed patches by default. Results
+are marked as `approved` or `candidate`.
+
+Retrieval is local-first. VibeWiki always has a keyword/BM25 fallback. If an
+OpenAI-compatible embedding API is configured, it adds semantic retrieval and
+caches vectors under `.vibewiki/cache/embeddings/`, which is ignored by Git:
+
+```bash
+export VIBEWIKI_EMBEDDING_BASE_URL="https://api.openai.com/v1"
+export VIBEWIKI_EMBEDDING_API_KEY="..."
+export VIBEWIKI_EMBEDDING_MODEL="text-embedding-3-small"
+```
+
+LLM answers use OpenAI-compatible chat completions:
+
+```bash
+export VIBEWIKI_LLM_BASE_URL="https://api.openai.com/v1"
+export VIBEWIKI_LLM_API_KEY="..."
+export VIBEWIKI_LLM_MODEL="gpt-4.1-mini"
+```
+
+The same environment variable shape can point at OpenRouter, DeepSeek, local
+OpenAI-compatible servers, or other compatible providers.
 
 ## Project Philosophy
 

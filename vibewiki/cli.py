@@ -12,6 +12,7 @@ from .merge import merge_patches
 from .project import init_project
 from .review import patch_summary, review_patches
 from .review_board import generate_review_board
+from .retrieval import answer_question, build_context_pack, format_search_results, search_memory
 from .validate import default_skill_path, validate_skill_file
 
 
@@ -168,6 +169,41 @@ def build_parser() -> argparse.ArgumentParser:
         help="Treat warnings as failures.",
     )
 
+    search = subparsers.add_parser("search", help="Search approved and candidate VibeWiki memory.")
+    search.add_argument("query", help="Search query.")
+    search.add_argument("--scope", choices=["approved", "candidate", "all"], default=None)
+    search.add_argument("--max-items", type=int, default=None, help="Maximum results.")
+    search.add_argument("--snippet-chars", type=int, default=None, help="Snippet size per result.")
+    search.add_argument("--verbose", action="store_true", help="Show full matched chunk text.")
+    search.add_argument(
+        "--no-embeddings",
+        action="store_true",
+        help="Disable embedding retrieval even if configured.",
+    )
+
+    ask = subparsers.add_parser("ask", help="Ask a question against VibeWiki memory.")
+    ask.add_argument("query", help="Question to answer.")
+    ask.add_argument("--scope", choices=["approved", "candidate", "all"], default=None)
+    ask.add_argument("--max-items", type=int, default=None, help="Maximum evidence items.")
+    ask.add_argument("--verbose", action="store_true", help="Show longer evidence in draft mode.")
+    ask.add_argument(
+        "--no-embeddings",
+        action="store_true",
+        help="Disable embedding retrieval even if configured.",
+    )
+
+    context = subparsers.add_parser("context", help="Build a compact context pack for an AI agent.")
+    context.add_argument("--for", dest="query", required=True, help="Task or question to retrieve for.")
+    context.add_argument("--scope", choices=["approved", "candidate", "all"], default=None)
+    context.add_argument("--max-items", type=int, default=None, help="Maximum context items.")
+    context.add_argument("--max-chars", type=int, default=None, help="Maximum characters per item.")
+    context.add_argument("--format", choices=["yaml", "json"], default="yaml")
+    context.add_argument(
+        "--no-embeddings",
+        action="store_true",
+        help="Disable embedding retrieval even if configured.",
+    )
+
     return parser
 
 
@@ -307,6 +343,47 @@ def run(args: argparse.Namespace) -> int:
         report = validate_skill_file(skill_path)
         print(report.render())
         return 0 if report.ok(strict=args.strict) else 1
+
+    if args.subcommand == "search":
+        results = search_memory(
+            project,
+            args.query,
+            scope=args.scope,
+            max_items=args.max_items,
+            snippet_chars=args.snippet_chars,
+            use_embeddings=not args.no_embeddings,
+        )
+        print(format_search_results(results, verbose=args.verbose), end="")
+        return 0
+
+    if args.subcommand == "ask":
+        print(
+            answer_question(
+                project,
+                args.query,
+                scope=args.scope,
+                max_items=args.max_items,
+                verbose=args.verbose,
+                use_embeddings=not args.no_embeddings,
+            ),
+            end="",
+        )
+        return 0
+
+    if args.subcommand == "context":
+        print(
+            build_context_pack(
+                project,
+                args.query,
+                scope=args.scope,
+                max_items=args.max_items,
+                max_chars_per_item=args.max_chars,
+                output_format=args.format,
+                use_embeddings=not args.no_embeddings,
+            ),
+            end="",
+        )
+        return 0
 
     raise AssertionError(f"Unhandled command: {args.subcommand}")
 

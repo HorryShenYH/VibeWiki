@@ -20,6 +20,25 @@ review:
 distill:
   mode: local
   uncertain_by_default: true
+retrieval:
+  default_scope: all
+  search_max_items: 10
+  search_snippet_chars: 500
+  context_max_items: 8
+  context_max_chars_per_item: 700
+  ask_max_items: 8
+  ask_context_chars: 8000
+  format: yaml
+llm:
+  base_url_env: VIBEWIKI_LLM_BASE_URL
+  api_key_env: VIBEWIKI_LLM_API_KEY
+  model_env: VIBEWIKI_LLM_MODEL
+embedding:
+  enabled: auto
+  cache_dir: .vibewiki/cache/embeddings
+  base_url_env: VIBEWIKI_EMBEDDING_BASE_URL
+  api_key_env: VIBEWIKI_EMBEDDING_API_KEY
+  model_env: VIBEWIKI_EMBEDDING_MODEL
 """
 
 WIKI_INDEX = """# Project Wiki
@@ -159,6 +178,9 @@ def init_project(project: Path, force: bool = False) -> list[Path]:
         if write_text_if_allowed(path, text, force=force):
             created.append(path)
 
+    if _ensure_gitignore_cache(root):
+        created.append(root / ".gitignore")
+
     return created
 
 
@@ -177,6 +199,7 @@ def ensure_workspace(project: Path) -> None:
     registry = root / ".vibewiki" / "skill_registry.yaml"
     if not registry.exists():
         registry.write_text(REGISTRY_TEMPLATE, encoding="utf-8")
+    _ensure_gitignore_cache(root)
     for path, text in {
         root / "docs" / "wiki" / "knowledge.md": KNOWLEDGE,
         root / "docs" / "wiki" / "todos.md": TODOS,
@@ -185,3 +208,18 @@ def ensure_workspace(project: Path) -> None:
         root / "docs" / "wiki" / "directions.md": DIRECTIONS,
     }.items():
         write_text_if_allowed(path, text)
+
+
+def _ensure_gitignore_cache(root: Path) -> bool:
+    path = root / ".gitignore"
+    line = ".vibewiki/cache/"
+    if path.exists():
+        text = path.read_text(encoding="utf-8")
+        entries = {item.strip() for item in text.splitlines()}
+        if line in entries:
+            return False
+        suffix = "" if not text or text.endswith("\n") else "\n"
+        path.write_text(f"{text}{suffix}{line}\n", encoding="utf-8")
+        return True
+    path.write_text(f"{line}\n", encoding="utf-8")
+    return True

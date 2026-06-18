@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import json
+import os
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from vibewiki.capture import capture_session
 from vibewiki.distill import distill_session
@@ -13,6 +15,7 @@ from vibewiki.merge import merge_patches
 from vibewiki.project import init_project
 from vibewiki.review import review_patches
 from vibewiki.review_board import generate_review_board
+from vibewiki.retrieval import answer_question, build_context_pack, search_memory
 from vibewiki.validate import validate_skill_file, validate_skill_text
 
 
@@ -34,6 +37,7 @@ class VibeWikiFlowTest(unittest.TestCase):
             self.assertTrue((root / "docs" / "wiki" / "research_notes.md").exists())
             self.assertTrue((root / "docs" / "wiki" / "directions.md").exists())
             self.assertTrue((root / ".vibewiki" / "skill_registry.yaml").exists())
+            self.assertIn(".vibewiki/cache/", (root / ".gitignore").read_text(encoding="utf-8"))
 
             session = capture_session(
                 root,
@@ -475,6 +479,129 @@ python3 compare_outputs.py
             self.assertIn("vibewiki --project", html)
             self.assertIn("review --patch-dir", html)
             self.assertIn("merge --patch-dir", html)
+
+    def test_search_reads_approved_and_candidate_memory(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            init_project(root)
+            (root / "docs" / "wiki" / "research_notes.md").write_text(
+                """# Research Notes
+
+## CloudRIC Baseline
+
+CloudRIC is not an apples-to-apples comparison against traditional RAN base stations.
+""",
+                encoding="utf-8",
+            )
+            finding_dir = root / ".vibewiki" / "patches" / "draft-session" / "findings"
+            finding_dir.mkdir(parents=True)
+            (finding_dir / "research_note__cloudric-energy.md").write_text(
+                """# Research Note: CloudRIC Energy Caveat
+
+Status: candidate
+Type: research_note
+Session: draft-session
+
+## Summary
+
+CloudRIC energy efficiency evidence is useful, but its baseline is an internal vRAN deployment.
+""",
+                encoding="utf-8",
+            )
+
+            results = search_memory(root, "CloudRIC traditional RAN", use_embeddings=False)
+
+            self.assertTrue(any(result.chunk.status == "approved" for result in results))
+            self.assertTrue(any(result.chunk.status == "candidate" for result in results))
+            self.assertIn("CloudRIC", results[0].snippet)
+
+    def test_context_pack_outputs_json_for_agents(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            init_project(root)
+            (root / "skills" / "skilllets" / "vemu-f5.md").write_text(
+                """# Skilllet: VEMU F5
+
+Status: approved
+Kind: skilllet
+
+## Steps
+
+Set `TARGET_DAG`, build DSL, then run the emulator.
+""",
+                encoding="utf-8",
+            )
+
+            rendered = build_context_pack(
+                root,
+                "how to run VEMU F5 TARGET_DAG",
+                output_format="json",
+                use_embeddings=False,
+            )
+            payload = json.loads(rendered)
+
+            self.assertEqual(payload["query"], "how to run VEMU F5 TARGET_DAG")
+            self.assertTrue(payload["items"])
+            self.assertEqual(payload["items"][0]["status"], "approved")
+            self.assertIn("TARGET_DAG", payload["items"][0]["text"])
+
+    def test_ask_without_llm_returns_retrieval_draft(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            init_project(root)
+            (root / "docs" / "wiki" / "knowledge.md").write_text(
+                """# Knowledge
+
+## VCMXMUL
+
+VCMXMUL Gauss form is not bit-exact for fixed-point OFDM.
+""",
+                encoding="utf-8",
+            )
+
+            with patch.dict(os.environ, {}, clear=True):
+                answer = answer_question(root, "VCMXMUL OFDM bit exact?", use_embeddings=False)
+
+            self.assertIn("Answer Draft", answer)
+            self.assertIn("VCMXMUL", answer)
+            self.assertIn("docs/wiki/knowledge.md", answer)
+
+    def test_embedding_search_writes_local_cache(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            init_project(root)
+            (root / "docs" / "wiki" / "knowledge.md").write_text(
+                """# Knowledge
+
+## Resource Pooling
+
+Heterogeneous accelerator pooling improves baseband scheduling.
+""",
+                encoding="utf-8",
+            )
+
+            def fake_embeddings(_base_url: str, _api_key: str, _model: str, inputs: list[str]) -> list[list[float]]:
+                vectors: list[list[float]] = []
+                for value in inputs:
+                    if "semantic query" in value or "Heterogeneous accelerator" in value:
+                        vectors.append([1.0, 0.0])
+                    else:
+                        vectors.append([0.0, 1.0])
+                return vectors
+
+            env = {
+                "VIBEWIKI_EMBEDDING_BASE_URL": "http://embedding.local/v1",
+                "VIBEWIKI_EMBEDDING_MODEL": "fake-embedding",
+            }
+            with patch.dict(os.environ, env, clear=True):
+                with patch("vibewiki.retrieval._post_embeddings", side_effect=fake_embeddings):
+                    results = search_memory(root, "semantic query", use_embeddings=True)
+
+            self.assertTrue(results)
+            self.assertGreater(results[0].embedding_score or 0, 0.9)
+            cache = root / ".vibewiki" / "cache" / "embeddings" / "index.jsonl"
+            self.assertTrue(cache.exists())
+            self.assertIn("fake-embedding", cache.read_text(encoding="utf-8"))
 
 
 if __name__ == "__main__":
