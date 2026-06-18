@@ -6,6 +6,7 @@ from pathlib import Path
 
 from .capture import capture_session
 from .distill import distill_session
+from .import_markdown import import_markdown_session
 from .merge import merge_patches
 from .project import init_project
 from .review import patch_summary, review_patches
@@ -81,6 +82,30 @@ def build_parser() -> argparse.ArgumentParser:
 
     distill = subparsers.add_parser("distill", help="Generate candidate memory patches.")
     distill.add_argument("--session-dir", default=None, help="Specific session directory to distill.")
+
+    import_markdown = subparsers.add_parser(
+        "import-markdown",
+        help="Import an exported AI coding session Markdown file.",
+    )
+    import_markdown.add_argument("source", help="Markdown file to import.")
+    import_markdown.add_argument("--session-name", default=None, help="Short name used in the session id.")
+    import_markdown.add_argument("--goal", default="", help="Override detected session goal.")
+    import_markdown.add_argument("--outcome", default="", help="Override detected final outcome.")
+    import_markdown.add_argument(
+        "--command",
+        dest="commands",
+        action="append",
+        default=[],
+        help="Add a key command. Can be repeated.",
+    )
+    import_markdown.add_argument("--tests", default="", help="Override detected verification notes.")
+    import_markdown.add_argument("--benchmark", default="", help="Override detected benchmark notes.")
+    import_markdown.add_argument("--notes", default="", help="User notes to attach to the import.")
+    import_markdown.add_argument(
+        "--things-not-to-record",
+        default="",
+        help="Failed paths or sensitive details that should not enter project memory.",
+    )
 
     review = subparsers.add_parser("review", help="Inspect or approve candidate patches.")
     review.add_argument("--patch-dir", default=None, help="Specific patch directory to review.")
@@ -161,6 +186,26 @@ def run(args: argparse.Namespace) -> int:
         print(f"- {paths.skill_patch}")
         print(f"- {paths.agent_rule_patch}")
         print(f"- {paths.questions}")
+        return 0
+
+    if args.subcommand == "import-markdown":
+        paths = import_markdown_session(
+            project,
+            _path(args.source),
+            goal=args.goal,
+            outcome=args.outcome,
+            commands=args.commands or [],
+            tests=args.tests,
+            benchmark=args.benchmark,
+            notes=args.notes,
+            things_not_to_record=args.things_not_to_record,
+            session_name=args.session_name,
+        )
+        print(f"Imported markdown session: {paths.session_dir}")
+        print(f"- {paths.session_md}")
+        print(f"- {paths.session_dir / 'raw_session.md'}")
+        print(f"- {paths.diff_patch}")
+        print(f"- {paths.metadata_yaml}")
         return 0
 
     if args.subcommand == "review":

@@ -18,6 +18,13 @@ vibewiki review --approve
 vibewiki merge
 ```
 
+If the session was already exported from Codex, Claude, Cursor, or another AI
+tool, they can start with:
+
+```bash
+vibewiki import-markdown path/to/session.md
+```
+
 The project receives an approved Wiki note, a reusable Skill draft, and updated
 agent guidance.
 
@@ -25,6 +32,8 @@ agent guidance.
 
 - `vibewiki init`: create local memory structure
 - `vibewiki capture`: save session notes, git diff, metadata
+- `vibewiki import-markdown`: preserve raw exported session Markdown and create
+  a normalized session record
 - `vibewiki distill`: create candidate patches
 - `vibewiki validate-skill`: check required Skill sections, probes, evidence,
   confidence, and TODOs
@@ -36,6 +45,7 @@ agent guidance.
 - Works in a normal git project.
 - Works without network access.
 - Stores the original session evidence.
+- Imports exported Markdown sessions without requiring an LLM.
 - Separates candidates from approved knowledge.
 - Produces at least one question when context is missing.
 - Flags incomplete Skill contracts before review.

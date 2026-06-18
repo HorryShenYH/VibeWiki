@@ -6,6 +6,7 @@ from pathlib import Path
 
 from vibewiki.capture import capture_session
 from vibewiki.distill import distill_session
+from vibewiki.import_markdown import import_markdown_session
 from vibewiki.merge import merge_patches
 from vibewiki.project import init_project
 from vibewiki.review import review_patches
@@ -67,6 +68,42 @@ Incomplete Skill
 
         self.assertFalse(report.ok())
         self.assertTrue(any(item.code == "missing-section" for item in report.errors))
+
+    def test_import_markdown_creates_session_evidence(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = root / "codex_session.md"
+            source.write_text(
+                """# Fix VEMU Output Mismatch
+
+> Help me debug the simulator mismatch.
+
+结论：VEMU output now matches the reference trace.
+
+```bash
+make -C /work/VEMU/dsl all
+python3 compare_outputs.py
+```
+
+验证情况：
+- resource check passed
+- exit code 0
+- RMSE 0
+""",
+                encoding="utf-8",
+            )
+
+            session = import_markdown_session(root, source)
+            self.assertTrue((session.session_dir / "raw_session.md").exists())
+            session_text = session.session_md.read_text(encoding="utf-8")
+            self.assertIn("Fix VEMU Output Mismatch", session_text)
+            self.assertIn("make -C /work/VEMU/dsl all", session_text)
+            self.assertIn("exit code 0", session_text)
+            self.assertIn("imported_from:", session.metadata_yaml.read_text(encoding="utf-8"))
+
+            patches = distill_session(root, session_dir=session.session_dir)
+            self.assertTrue(patches.skill_patch.exists())
+            self.assertIn("make -C /work/VEMU/dsl all", patches.skill_patch.read_text(encoding="utf-8"))
 
 
 if __name__ == "__main__":

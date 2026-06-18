@@ -17,6 +17,7 @@ The first version is intentionally local and conservative:
 
 - `vibewiki init` creates the project memory folders.
 - `vibewiki capture` records one coding session, including git diff and notes.
+- `vibewiki import-markdown` imports an exported Codex, Claude, or Cursor session.
 - `vibewiki distill` creates candidate memory patches.
 - `vibewiki validate-skill` checks Skill Patch quality gates.
 - `vibewiki review` records human approval.
@@ -80,6 +81,16 @@ vibewiki review --approve
 vibewiki merge
 ```
 
+Or import a saved AI session:
+
+```bash
+vibewiki import-markdown ./codex-session.md
+vibewiki distill
+vibewiki validate-skill
+vibewiki review --approve
+vibewiki merge
+```
+
 This creates:
 
 ```text
@@ -98,6 +109,11 @@ Use strict validation when you want warnings to block promotion:
 ```bash
 vibewiki validate-skill --strict
 ```
+
+`import-markdown` preserves the full original file as `raw_session.md`, then
+creates a normalized `session.md` with detected title, outcome signals, commands,
+verification hints, and benchmark hints. Treat the normalized fields as a review
+draft, not as final truth.
 
 ## Project Philosophy
 
