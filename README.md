@@ -313,6 +313,20 @@ them.
 
 See [`docs/research_ctx2skill.md`](docs/research_ctx2skill.md).
 
+## ECC-Inspired Direction
+
+ECC shows a mature cross-harness agent layer: skills, hooks, agents, rules,
+MCPs, installers, and continuous learning. VibeWiki should not become a giant
+harness bundle. The useful idea to borrow is smaller: reviewed atomic
+`instincts` with scope, confidence, evidence, and a promotion path into
+skilllets, workflows, or agent rules.
+
+This keeps VibeWiki positioned as an upstream trusted memory compiler that can
+feed systems such as ECC, Codex skills, Claude skills, Cursor rules, and
+LLM-Wiki-style retrieval layers.
+
+See [`docs/research_ecc.md`](docs/research_ecc.md).
+
 ## Killer Demo
 
 Venus is the first serious case study: use VibeWiki to preserve hard-won

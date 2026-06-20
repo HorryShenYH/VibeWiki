@@ -69,6 +69,23 @@ Needed improvements:
   merge suggestions
 - keep local heuristics as fallback
 
+### Instincts And Skill Evolution
+
+Research into ECC suggests VibeWiki should add a memory unit smaller than a
+skilllet: an instinct or micro-rule. It should capture one trigger, one action,
+scope, confidence, domain, and evidence. This would let VibeWiki preserve useful
+lessons without over-promoting every observation into a skill.
+
+Needed improvements:
+
+- add `instincts/` as a candidate memory type
+- add `scope: project|personal|global` and confidence metadata to candidates
+- let the review UI approve, reject, defer, downgrade, or promote instincts
+- add `vibewiki evolve --preview` to cluster reviewed instincts into proposed
+  skilllets, workflows, or agent rules
+- promote project instincts to personal/global only after repeated
+  evidence-backed use across projects
+
 ### Review Experience
 
 `review-board` supports a CLI-backed item-decision loop, and `review-ui` now

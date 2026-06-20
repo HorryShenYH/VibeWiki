@@ -16,6 +16,11 @@ sessions.
   steps are better precision, LLM-assisted distillation, and review controls.
 - Add optional LLM-assisted distillation while keeping deterministic local
   heuristics as the fallback.
+- Add an ECC-inspired instinct layer below skilllets: atomic reviewed
+  trigger/action memories with scope, confidence, evidence, and later promotion
+  into skilllets, workflows, or agent rules.
+- Add `vibewiki evolve --preview` to cluster repeated approved instincts into
+  larger reusable units without mutating approved memory directly.
 - Continue item-level review ergonomics. CLI-backed
   approve/reject/defer/downgrade/merge/edit and the clickable SSH-friendly
   `review-ui` are implemented. The UI now supports filtering, hiding reviewed
@@ -32,6 +37,10 @@ sessions.
 - Add `export --format llms-full` for compact project context export.
 - Improve multilingual behavior beyond the review UI: bilingual section
   aliases, language-aware prompts, and optional answer language control.
+- Add optional hook capture for session end, pre-compact, and important command
+  results, but keep hooks opt-in and candidate-only.
+- Add `vibewiki status` and expand `vibewiki doctor` planning around config,
+  review servers, stale candidates, embedding cache, and Git state.
 - Add skilllet versioning, deprecation, supersession, conflict detection, and a
   changelog for merged memory units.
 - Add CI, package/release workflow, privacy/security docs, and `vibewiki doctor`.
