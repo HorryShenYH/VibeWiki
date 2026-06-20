@@ -22,13 +22,27 @@ from .review import (
 from .review_plan import ReviewPlanEntry, build_review_plan
 from .retrieval import load_retrieval_config
 from .text_utils import read_text_if_exists
-from .translation import cached_translation_markdown, translate_markdown
+from .translation import cached_translation_markdown, language_label, translate_markdown
+
+
+TRANSLATION_TARGETS = ["zh", "ja", "ko", "fr", "de", "es", "pt", "ru"]
+TRANSLATION_TARGET_LABELS_ZH = {
+    "zh": "中文",
+    "ja": "日文",
+    "ko": "韩文",
+    "fr": "法文",
+    "de": "德文",
+    "es": "西班牙文",
+    "pt": "葡萄牙文",
+    "ru": "俄文",
+}
 
 
 def render_review_ui(
     project: Path,
     *,
     patch_dir: Path | None = None,
+    target_language: str = "zh",
     message: str = "",
     message_zh: str = "",
 ) -> str:
@@ -41,7 +55,14 @@ def render_review_ui(
     plan_summary = review_plan.payload.get("summary", {})
     if not isinstance(plan_summary, dict):
         plan_summary = {}
-    items = _review_items(root, selected_patch_dir, decisions, review_plan.items)
+    selected_target_language = _normalize_target_language(target_language)
+    items = _review_items(
+        root,
+        selected_patch_dir,
+        decisions,
+        review_plan.items,
+        target_language=selected_target_language,
+    )
     session_md = read_text_if_exists(root / ".vibewiki" / "sessions" / session_id / "session.md")
     sections = parse_sections(session_md) if session_md else {}
     goal = sections.get("Goal", "Not provided.").strip()
@@ -451,7 +472,7 @@ def render_review_ui(
           <div class="text">
             <p>{_i18n("Review one candidate at a time: submit it, discard it, edit Markdown directly, or ask the LLM to revise it from your instructions.", "一次只审核一条候选：提交、不提交、直接改 Markdown，或者写修改意见让 LLM 修订。")}</p>
             <p>{_i18n("The LLM only rewrites the candidate draft. You still decide whether to submit it.", "LLM 只生成修订稿，是否提交仍然由你判断。")}</p>
-            <p>{_i18n("Chinese Markdown previews are display-only and cached locally; the source Markdown stays English.", "中文 Markdown 预览只用于显示，并会本地缓存；源 Markdown 仍然保持英文。")}</p>
+            <p>{_i18n("Translated Markdown previews are display-only and cached locally; the source Markdown stays English.", "翻译后的 Markdown 预览只用于显示，并会本地缓存；源 Markdown 仍然保持英文。")}</p>
           </div>
         </section>
       </aside>
@@ -572,10 +593,14 @@ def serve_review_ui(
                 parsed = parse_qs(query)
                 message = parsed.get("message", [""])[0]
                 message_zh = parsed.get("message_zh", [""])[0]
+                target_language = parsed.get("target_language", ["zh"])[0]
+            else:
+                target_language = "zh"
             self._send_html(
                 render_review_ui(
                     root,
                     patch_dir=selected_patch_dir,
+                    target_language=target_language,
                     message=message,
                     message_zh=message_zh,
                 )
@@ -590,6 +615,9 @@ def serve_review_ui(
                     action = _form_value(data, "action")
                     body = _form_text(data, "body")
                     instruction = _form_value(data, "instruction")
+                    target_language = _normalize_target_language(
+                        _form_value(data, "target_language") or "zh"
+                    )
                     if action == "save":
                         update_item_body(root, patch_dir=selected_patch_dir, item=item, body=body)
                         self._redirect(f"Saved Markdown for {item}", f"已保存 {item} 的 Markdown")
@@ -623,10 +651,15 @@ def serve_review_ui(
                         self._redirect(f"Revised {item} with LLM", f"LLM 已修订 {item}")
                         return
                     if action == "translate":
-                        translate_candidate_markdown(root, body=body)
+                        translate_candidate_markdown(
+                            root,
+                            body=body,
+                            target_language=target_language,
+                        )
                         self._redirect(
-                            f"Generated Chinese preview for {item}",
-                            f"已生成 {item} 的中文预览",
+                            f"Generated {language_label(target_language)} preview for {item}",
+                            f"已生成 {item} 的 {_language_label_zh(target_language)} 预览",
+                            target_language=target_language,
                         )
                         return
                     raise ValueError(f"Unknown item action: {action}")
@@ -700,8 +733,19 @@ def serve_review_ui(
             self.end_headers()
             self.wfile.write(encoded)
 
-        def _redirect(self, message: str, message_zh: str = "") -> None:
-            target = "/?" + urlencode({"message": message, "message_zh": message_zh or message})
+        def _redirect(
+            self,
+            message: str,
+            message_zh: str = "",
+            target_language: str = "zh",
+        ) -> None:
+            target = "/?" + urlencode(
+                {
+                    "message": message,
+                    "message_zh": message_zh or message,
+                    "target_language": _normalize_target_language(target_language),
+                }
+            )
             self.send_response(303)
             self.send_header("Location", target)
             self.end_headers()
@@ -720,6 +764,7 @@ def _review_items(
     patch_dir: Path,
     decisions: dict[str, ItemDecision],
     review_plan: dict[str, ReviewPlanEntry] | None = None,
+    target_language: str = "zh",
 ) -> list[dict[str, object]]:
     plan_items = review_plan or {}
     items: list[dict[str, object]] = []
@@ -748,7 +793,12 @@ def _review_items(
                     "plan": plan_items.get(item_id),
                     "snippet": _snippet(text),
                     "body": text,
-                    "translation": cached_translation_markdown(project, markdown=text),
+                    "translation": cached_translation_markdown(
+                        project,
+                        markdown=text,
+                        target_language=target_language,
+                    ),
+                    "target_language": target_language,
                 }
             )
     return items
@@ -799,8 +849,9 @@ def _item_card(item: dict[str, object]) -> str:
     item_snippet = str(item["snippet"])
     item_body = str(item["body"])
     item_translation = str(item.get("translation") or "")
+    target_language = _normalize_target_language(str(item.get("target_language") or "zh"))
     preview_html = _markdown_to_html(item_body)
-    translation_html = _translation_preview(item_translation)
+    translation_html = _translation_preview(item_translation, target_language=target_language)
     search_text = " ".join(
         str(value)
         for value in [
@@ -832,7 +883,13 @@ def _item_card(item: dict[str, object]) -> str:
     <div class="simple-actions">
       <button class="primary" type="submit" name="action" value="approve">{_i18n("Submit", "提交")}</button>
       <button class="reject" type="submit" name="action" value="reject">{_i18n("Do Not Submit", "不提交")}</button>
-      <button class="save" type="submit" name="action" value="translate">{_i18n("Chinese Preview", "生成中文预览")}</button>
+      <label class="select-item">
+        {_i18n("Translate to", "翻译为")}
+        <select name="target_language">
+          {_translation_options(target_language)}
+        </select>
+      </label>
+      <button class="save" type="submit" name="action" value="translate">{_i18n("Translate Preview", "生成翻译预览")}</button>
     </div>
     <details class="review-lab">
       <summary>{_i18n("Edit Markdown or Ask LLM to Revise", "编辑 Markdown 或让 LLM 修改")}</summary>
@@ -847,11 +904,13 @@ def _item_card(item: dict[str, object]) -> str:
 </article>"""
 
 
-def _translation_preview(markdown: str) -> str:
+def _translation_preview(markdown: str, *, target_language: str) -> str:
     if not markdown.strip():
         return ""
+    label_en = language_label(target_language)
+    label_zh = _language_label_zh(target_language)
     return f"""<details class="translation-preview" open>
-  <summary>{_i18n("Chinese Markdown Preview", "中文 Markdown 预览")}</summary>
+  <summary>{_i18n(f"{label_en} Markdown Preview", f"{label_zh} Markdown 预览")}</summary>
   <p class="translation-note">{_i18n("Display only. The stored Markdown remains English.", "仅用于显示。实际存储的 Markdown 仍然是英文。")}</p>
   <div class="preview">{_markdown_to_html(markdown)}</div>
 </details>"""
@@ -887,8 +946,38 @@ Current candidate Markdown:
     return _strip_markdown_fence(revised).strip() + "\n"
 
 
-def translate_candidate_markdown(project: Path, *, body: str) -> str:
-    return translate_markdown(project.resolve(), markdown=body)
+def translate_candidate_markdown(
+    project: Path,
+    *,
+    body: str,
+    target_language: str = "zh",
+) -> str:
+    return translate_markdown(
+        project.resolve(),
+        markdown=body,
+        target_language=_normalize_target_language(target_language),
+    )
+
+
+def _translation_options(selected: str) -> str:
+    options: list[str] = []
+    selected_target = _normalize_target_language(selected)
+    for language in TRANSLATION_TARGETS:
+        is_selected = " selected" if language == selected_target else ""
+        label = f"{language_label(language)} / {_language_label_zh(language)}"
+        options.append(
+            f'<option value="{_escape(language)}"{is_selected}>{_escape(label)}</option>'
+        )
+    return "\n".join(options)
+
+
+def _language_label_zh(language: str) -> str:
+    return TRANSLATION_TARGET_LABELS_ZH.get(language, language)
+
+
+def _normalize_target_language(value: str) -> str:
+    language = value.strip()
+    return language if language in TRANSLATION_TARGETS else "zh"
 
 
 def _strip_markdown_fence(text: str) -> str:

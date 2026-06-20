@@ -53,6 +53,8 @@ class VibeWikiFlowTest(unittest.TestCase):
             config_text = (root / ".vibewiki" / "config.yaml").read_text(encoding="utf-8")
             self.assertIn("mode: bilingual", config_text)
             self.assertIn("primary: zh", config_text)
+            self.assertIn("translation:", config_text)
+            self.assertIn("provider_env: VIBEWIKI_TRANSLATION_PROVIDER", config_text)
 
             session = capture_session(
                 root,
@@ -574,7 +576,8 @@ python3 compare_outputs.py
             self.assertIn('name="action" value="reject"', ui_html)
             self.assertIn('name="action" value="revise"', ui_html)
             self.assertIn('name="action" value="translate"', ui_html)
-            self.assertIn("生成中文预览", ui_html)
+            self.assertIn('name="target_language"', ui_html)
+            self.assertIn("生成翻译预览", ui_html)
             self.assertIn("隐藏已审", ui_html)
             self.assertIn("编辑 Markdown 或让 LLM 修改", ui_html)
             self.assertIn("让 LLM 生成修订稿", ui_html)
@@ -689,30 +692,52 @@ echo "# this stays code"
             self.assertEqual(revised, "# Revised Candidate\n\nStatus: candidate\n")
             self.assertTrue(mocked.called)
 
-    def test_review_ui_translation_uses_configured_chat_api_and_cache(self) -> None:
+    def test_review_ui_translation_uses_libretranslate_and_cache(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             init_project(root)
             body = "# Candidate\n\nKeep `VEMU` and `TARGET_DAG` unchanged.\n"
-            with patch.dict(os.environ, {"VIBEWIKI_LLM_API_KEY": "token"}, clear=True):
+            env = {
+                "VIBEWIKI_TRANSLATION_PROVIDER": "libretranslate",
+                "VIBEWIKI_TRANSLATION_BASE_URL": "http://translate.local",
+            }
+            with patch.dict(os.environ, env, clear=True):
                 with patch(
-                    "vibewiki.translation.chat_completion",
-                    return_value="# 候选\n\n保持 `VEMU` 和 `TARGET_DAG` 不变。",
+                    "vibewiki.translation._post_libretranslate",
+                    return_value="# 候选\n\n保持 VIBEWIKI_PLACEHOLDER_0 和 VIBEWIKI_PLACEHOLDER_1 不变。",
                 ) as mocked:
-                    translated = translate_candidate_markdown(root, body=body)
+                    translated = translate_candidate_markdown(root, body=body, target_language="zh")
 
                 with patch(
-                    "vibewiki.translation.chat_completion",
+                    "vibewiki.translation._post_libretranslate",
                     side_effect=AssertionError("translation should come from cache"),
                 ):
-                    cached = translate_candidate_markdown(root, body=body)
+                    cached = translate_candidate_markdown(root, body=body, target_language="zh")
 
             self.assertEqual(translated, "# 候选\n\n保持 `VEMU` 和 `TARGET_DAG` 不变。\n")
             self.assertEqual(cached, translated)
             self.assertEqual(mocked.call_count, 1)
+            self.assertEqual(mocked.call_args.kwargs["target_language"], "zh")
             cache_dir = root / ".vibewiki" / "cache" / "translations"
             self.assertTrue(any(cache_dir.glob("*.md")))
             self.assertTrue(any(cache_dir.glob("*.json")))
+
+    def test_review_ui_translation_does_not_use_llm_by_default(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            init_project(root)
+            with patch.dict(os.environ, {"VIBEWIKI_LLM_API_KEY": "token"}, clear=True):
+                with patch("importlib.util.find_spec", return_value=None):
+                    with patch(
+                        "vibewiki.translation.chat_completion",
+                        side_effect=AssertionError("LLM should be explicit for translation"),
+                    ):
+                        with self.assertRaisesRegex(RuntimeError, "No free translation provider"):
+                            translate_candidate_markdown(
+                                root,
+                                body="# Candidate\n\nTranslate me.\n",
+                                target_language="zh",
+                            )
 
     def test_item_level_review_decisions_affect_merge(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

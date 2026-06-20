@@ -44,6 +44,12 @@ embedding:
   base_url_env: VIBEWIKI_EMBEDDING_BASE_URL
   api_key_env: VIBEWIKI_EMBEDDING_API_KEY
   model_env: VIBEWIKI_EMBEDDING_MODEL
+translation:
+  provider_env: VIBEWIKI_TRANSLATION_PROVIDER
+  base_url_env: VIBEWIKI_TRANSLATION_BASE_URL
+  api_key_env: VIBEWIKI_TRANSLATION_API_KEY
+  default_target: zh
+  cache_dir: .vibewiki/cache/translations
 """
 
 WIKI_INDEX = """# Project Wiki / 项目 Wiki

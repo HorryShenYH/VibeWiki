@@ -107,8 +107,10 @@ Implemented UI improvements:
 - LLM-assisted candidate revision from reviewer instructions
 - Chinese/English UI label switching without showing both languages at once
 - rendered Markdown previews for candidate cards
-- cached Chinese Markdown preview generation for reviewers, while keeping
+- cached translated Markdown preview generation for reviewers, while keeping
   stored candidate Markdown in English
+- free translation providers through LibreTranslate-compatible APIs or local
+  Argos Translate, with LLM translation only as an explicit opt-in
 - pre-review triage in `review_plan.json`, which keeps all raw candidates but
   defaults the UI to a smaller batch of higher-value review items
 - terminal inspection with `vibewiki review-plan`
@@ -134,6 +136,7 @@ Remaining improvements:
 - optional `ask --language zh|en|bilingual`
 - answer/display language controls outside the review UI
 - cache management and refresh controls for translated Markdown previews
+- provider health checks for LibreTranslate and local Argos Translate
 - better templates for public docs and project Wikis that keep machine-facing
   memory compact while allowing localized display
 

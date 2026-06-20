@@ -201,10 +201,12 @@ instruction and let the configured LLM generate a revised candidate. The LLM
 only rewrites the draft; the human still decides whether to submit it.
 Candidate Markdown is previewed as rendered Markdown by default, and the review
 surface can switch between Chinese and English labels while keeping the
-underlying Markdown memory in English. For Chinese-native reviewers, each card
-can also generate a cached Chinese Markdown preview with the configured LLM.
+underlying Markdown memory in English. For reviewers who prefer another
+language, each card can also generate a cached Markdown translation preview.
 That translation is display-only and stored under `.vibewiki/cache/`; it never
-rewrites the source candidate.
+rewrites the source candidate. Translation is token-conscious by default:
+VibeWiki prefers a free LibreTranslate-compatible API or local Argos Translate,
+and only uses an LLM when `VIBEWIKI_TRANSLATION_PROVIDER=llm` is set explicitly.
 
 You can inspect or regenerate the triage plan from the terminal:
 
@@ -286,6 +288,28 @@ export VIBEWIKI_LLM_MODEL="gpt-4.1-mini"
 
 The same environment variable shape can point at OpenRouter, DeepSeek, local
 OpenAI-compatible servers, or other compatible providers.
+
+Markdown preview translation is configured separately so review does not burn
+LLM tokens by accident. For a free/self-hosted LibreTranslate-compatible server:
+
+```bash
+export VIBEWIKI_TRANSLATION_PROVIDER="libretranslate"
+export VIBEWIKI_TRANSLATION_BASE_URL="http://127.0.0.1:5000"
+# optional, only if your server requires it
+export VIBEWIKI_TRANSLATION_API_KEY="..."
+```
+
+If `argostranslate` and the needed language packages are installed locally, use:
+
+```bash
+export VIBEWIKI_TRANSLATION_PROVIDER="argos"
+```
+
+To opt into LLM translation anyway:
+
+```bash
+export VIBEWIKI_TRANSLATION_PROVIDER="llm"
+```
 
 ## Project Philosophy
 

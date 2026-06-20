@@ -80,27 +80,36 @@ Verification:
 
 - `python3 -m unittest discover -s tests` passed with 22 tests.
 
-## 2026-06-20 Display-Only Markdown Translation
+## 2026-06-20 Display-Only Markdown Translation Providers
 
 VibeWiki should be comfortable for Chinese-native reviewers without making the
 project memory multilingual and noisy. The storage rule stays simple: candidate
 and approved Markdown remain English by default. Translation belongs to the
 review display layer.
 
-The review UI now lets a reviewer generate a Chinese Markdown preview for each
-candidate. The translated preview is:
+The review UI now lets a reviewer choose a target language and generate a
+Markdown translation preview for each candidate. The translated preview is:
 
-- created with the configured OpenAI-compatible chat API
+- created with a free LibreTranslate-compatible API, local Argos Translate, or
+  explicit LLM opt-in
 - cached under `.vibewiki/cache/translations/`
 - rendered below the English preview
 - never written back to the candidate Markdown unless the human explicitly
   edits the source Markdown
 
+The default `auto` provider is token-conscious: it uses LibreTranslate if
+`VIBEWIKI_TRANSLATION_BASE_URL` is configured, then local Argos Translate if
+available, and otherwise fails with a configuration hint instead of silently
+spending LLM tokens. LLM translation is only used when
+`VIBEWIKI_TRANSLATION_PROVIDER=llm` is set.
+
 This keeps machine-facing memory compact while making human review less tiring.
 
 Verification:
 
-- `python3 -m unittest tests.test_cli_flow.VibeWikiFlowTest.test_review_ui_translation_uses_configured_chat_api_and_cache`
+- `python3 -m unittest tests.test_cli_flow.VibeWikiFlowTest.test_review_ui_translation_uses_libretranslate_and_cache`
+  passed.
+- `python3 -m unittest tests.test_cli_flow.VibeWikiFlowTest.test_review_ui_translation_does_not_use_llm_by_default`
   passed.
 
 ## 2026-06-20 Review Plan Triage
