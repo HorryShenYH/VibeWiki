@@ -152,6 +152,22 @@ def record_item_decision(
     return path
 
 
+def update_item_body(
+    project: Path,
+    *,
+    patch_dir: Path | None = None,
+    item: str,
+    body: str,
+) -> Path:
+    root = project.resolve()
+    ensure_workspace(root)
+    selected_patch_dir = patch_dir or latest_patch_dir(root)
+    normalized_item = normalize_item_id(selected_patch_dir, item)
+    path = (selected_patch_dir / normalized_item).resolve()
+    path.write_text(body.rstrip() + "\n", encoding="utf-8")
+    return path
+
+
 def patch_summary(project: Path, patch_dir: Path | None = None) -> str:
     root = project.resolve()
     selected_patch_dir = patch_dir or latest_patch_dir(root)

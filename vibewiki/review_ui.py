@@ -15,6 +15,7 @@ from .review import (
     read_item_decisions,
     record_item_decision,
     review_patches,
+    update_item_body,
 )
 from .text_utils import read_text_if_exists
 
@@ -26,6 +27,10 @@ def render_review_ui(project: Path, *, patch_dir: Path | None = None, message: s
     session_id = selected_patch_dir.name
     decisions = read_item_decisions(root, session_id)
     items = _review_items(selected_patch_dir, decisions)
+    kinds = sorted({str(item["kind"]) for item in items})
+    kind_options = "".join(
+        f'<option value="{_escape(kind)}">{_escape(kind)}</option>' for kind in kinds
+    )
     session_md = read_text_if_exists(root / ".vibewiki" / "sessions" / session_id / "session.md")
     sections = parse_sections(session_md) if session_md else {}
     goal = sections.get("Goal", "Not provided.").strip()
@@ -109,6 +114,41 @@ def render_review_ui(project: Path, *, patch_dir: Path | None = None, message: s
       background: #eefbf8;
       border-radius: 8px;
       color: #115e59;
+      transition: opacity .25s ease, transform .25s ease;
+    }}
+    .message.hide {{
+      opacity: 0;
+      transform: translateY(-4px);
+    }}
+    .toolbar {{
+      display: grid;
+      gap: 12px;
+      margin-bottom: 12px;
+    }}
+    .toolbar-row {{
+      display: grid;
+      grid-template-columns: minmax(180px, 1fr) minmax(140px, 220px) auto auto;
+      gap: 8px;
+      align-items: center;
+    }}
+    .bulk-row {{
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+    }}
+    label.inline {{
+      display: inline-flex;
+      gap: 6px;
+      align-items: center;
+      color: var(--muted);
+      font-size: 13px;
+      white-space: nowrap;
+    }}
+    .count {{
+      color: var(--muted);
+      font-size: 13px;
+      white-space: nowrap;
     }}
     .text {{ color: #202427; font-size: 13px; }}
     .text p {{ margin: 8px 0; }}
@@ -136,7 +176,43 @@ def render_review_ui(project: Path, *, patch_dir: Path | None = None, message: s
       background: #fff;
       color: var(--ink);
     }}
+    input[type="checkbox"] {{ width: auto; }}
     textarea {{ min-height: 68px; resize: vertical; }}
+    select {{
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 8px 10px;
+      font: inherit;
+      font-size: 13px;
+      background: #fff;
+      color: var(--ink);
+    }}
+    .select-item {{
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      color: var(--muted);
+      font-size: 13px;
+      white-space: nowrap;
+    }}
+    .editor {{
+      border-top: 1px solid var(--line);
+      margin-top: 12px;
+      padding-top: 12px;
+    }}
+    .editor summary {{
+      cursor: pointer;
+      color: var(--teal);
+      font-size: 13px;
+      margin-bottom: 8px;
+    }}
+    .editor textarea {{
+      min-height: 300px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 12px;
+      line-height: 1.45;
+    }}
     .buttons {{ display: flex; flex-wrap: wrap; gap: 8px; }}
     button {{
       border: 1px solid var(--line);
@@ -157,6 +233,7 @@ def render_review_ui(project: Path, *, patch_dir: Path | None = None, message: s
       main {{ padding: 16px; }}
       header {{ display: block; }}
       .layout {{ grid-template-columns: 1fr; }}
+      .toolbar-row {{ grid-template-columns: 1fr; }}
       .fields {{ grid-template-columns: 1fr; }}
       .patch-actions {{ margin-top: 12px; }}
     }}
@@ -193,16 +270,93 @@ def render_review_ui(project: Path, *, patch_dir: Path | None = None, message: s
         <section class="panel">
           <h2>How it works / 怎么用</h2>
           <div class="text">
-            <p>Click approve, reject, or defer directly. Fill title, summary, target, or note before edit, downgrade, or merge.</p>
-            <p>直接点批准、拒绝、稍后。需要改标题、摘要、目标或备注时先填表单，再点 edit/downgrade/merge。</p>
+            <p>Reviewed cards are hidden by default. Turn off hide reviewed if you want to inspect previous decisions.</p>
+            <p>已审核卡片默认隐藏。需要回看时取消隐藏已审即可。</p>
+            <p>Open Markdown edit on any card to revise the candidate before approving it.</p>
+            <p>每张卡片都能展开 Markdown 正文，直接修改候选记忆。</p>
           </div>
         </section>
       </aside>
-      <section class="stack">
+      <section>
+        <section class="panel toolbar" aria-label="Review tools">
+          <div class="toolbar-row">
+            <input id="filter-text" type="search" placeholder="Search candidates / 搜索候选">
+            <select id="filter-kind" aria-label="Kind filter">
+              <option value="">All kinds / 全部类型</option>
+              {kind_options}
+            </select>
+            <label class="inline">
+              <input id="hide-reviewed" type="checkbox" checked>
+              Hide reviewed / 隐藏已审
+            </label>
+            <span id="visible-count" class="count">{_escape(str(len(items)))} / {_escape(str(len(items)))}</span>
+          </div>
+          <form id="bulk-form" class="bulk-row" method="post" action="/bulk-decision">
+            <select name="decision" aria-label="Bulk decision">
+              <option value="approve">Approve selected / 批准所选</option>
+              <option value="reject">Reject selected / 拒绝所选</option>
+              <option value="defer">Defer selected / 稍后处理</option>
+            </select>
+            <input name="note" placeholder="Bulk note / 批量备注">
+            <button class="primary" type="submit">Apply / 应用</button>
+          </form>
+        </section>
+        <section class="stack">
         {''.join(_item_card(item) for item in items)}
+        </section>
       </section>
     </section>
   </main>
+  <script>
+    (() => {{
+      const messages = document.querySelectorAll(".message");
+      window.setTimeout(() => {{
+        messages.forEach((message) => {{
+          message.classList.add("hide");
+          window.setTimeout(() => message.remove(), 350);
+        }});
+      }}, 3200);
+
+      const cards = Array.from(document.querySelectorAll("[data-review-card]"));
+      const textFilter = document.getElementById("filter-text");
+      const kindFilter = document.getElementById("filter-kind");
+      const hideReviewed = document.getElementById("hide-reviewed");
+      const visibleCount = document.getElementById("visible-count");
+
+      function applyFilters() {{
+        const query = (textFilter.value || "").trim().toLowerCase();
+        const kind = kindFilter.value;
+        const shouldHideReviewed = hideReviewed.checked;
+        let visible = 0;
+        cards.forEach((card) => {{
+          const matchesText = !query || (card.dataset.search || "").includes(query);
+          const matchesKind = !kind || card.dataset.kind === kind;
+          const reviewed = card.dataset.decision && card.dataset.decision !== "unreviewed";
+          const matchesReviewState = !shouldHideReviewed || !reviewed;
+          const show = matchesText && matchesKind && matchesReviewState;
+          card.hidden = !show;
+          if (show) visible += 1;
+        }});
+        visibleCount.textContent = `${{visible}} / ${{cards.length}}`;
+      }}
+
+      [textFilter, kindFilter, hideReviewed].forEach((control) => {{
+        control.addEventListener("input", applyFilters);
+        control.addEventListener("change", applyFilters);
+      }});
+
+      const bulkForm = document.getElementById("bulk-form");
+      bulkForm.addEventListener("submit", (event) => {{
+        const checked = document.querySelectorAll('input[name="item"][form="bulk-form"]:checked');
+        if (!checked.length) {{
+          event.preventDefault();
+          window.alert("Select at least one item / 请至少选择一项");
+        }}
+      }});
+
+      applyFilters();
+    }})();
+  </script>
 </body>
 </html>
 """
@@ -246,6 +400,31 @@ def serve_review_ui(
                         note=_form_value(data, "note"),
                     )
                     self._redirect(f"Recorded {decision} for {item}")
+                    return
+                if self.path == "/bulk-decision":
+                    items = _form_values(data, "item")
+                    decision = _form_value(data, "decision")
+                    if not items:
+                        raise ValueError("No items selected.")
+                    for item in items:
+                        record_item_decision(
+                            root,
+                            patch_dir=selected_patch_dir,
+                            item=item,
+                            decision=decision,
+                            note=_form_value(data, "note"),
+                        )
+                    self._redirect(f"Recorded {decision} for {len(items)} items")
+                    return
+                if self.path == "/save-item":
+                    item = _form_value(data, "item")
+                    update_item_body(
+                        root,
+                        patch_dir=selected_patch_dir,
+                        item=item,
+                        body=_form_text(data, "body"),
+                    )
+                    self._redirect(f"Saved Markdown for {item}")
                     return
                 if self.path == "/patch-review":
                     review_patches(root, patch_dir=selected_patch_dir, approve=True)
@@ -310,6 +489,7 @@ def _review_items(patch_dir: Path, decisions: dict[str, ItemDecision]) -> list[d
                     "status": _field(text, "Status") or "candidate",
                     "decision": decisions.get(item_id),
                     "snippet": _snippet(text),
+                    "body": text,
                 }
             )
     return items
@@ -320,27 +500,52 @@ def _item_card(item: dict[str, object]) -> str:
     decision_text = decision.decision if isinstance(decision, ItemDecision) else "unreviewed"
     decision_class = "skip" if decision_text in {"reject", "defer"} else "decision"
     item_id = str(item["id"])
-    return f"""<article class="card">
+    item_title = str(item["title"])
+    item_kind = str(item["kind"])
+    item_status = str(item["status"])
+    item_snippet = str(item["snippet"])
+    item_body = str(item["body"])
+    title = _review_value(decision, "title")
+    target = _review_value(decision, "target")
+    tags = _review_value(decision, "tags")
+    summary = _review_value(decision, "summary")
+    note = _review_value(decision, "note")
+    search_text = " ".join(
+        str(value)
+        for value in [
+            item_title,
+            item_kind,
+            item_status,
+            decision_text,
+            item_snippet,
+        ]
+    )
+    search_text = " ".join(search_text.split()).lower()
+    return f"""<article class="card" data-review-card data-kind="{_escape(item_kind)}" data-decision="{_escape(decision_text)}" data-search="{_escape(search_text)}">
   <div class="card-head">
     <div>
-      <h3>{_escape(item["title"])}</h3>
+      <h3>{_escape(item_title)}</h3>
       <div class="badges">
-        <span class="badge kind">{_escape(item["kind"])}</span>
-        <span class="badge">{_escape(item["status"])}</span>
+        <span class="badge kind">{_escape(item_kind)}</span>
+        <span class="badge">{_escape(item_status)}</span>
         <span class="badge {decision_class}">{_escape(decision_text)}</span>
       </div>
     </div>
+    <label class="select-item">
+      <input type="checkbox" name="item" value="{_escape(item_id)}" form="bulk-form">
+      Select / 选择
+    </label>
   </div>
-  <div class="snippet">{_escape(item["snippet"])}</div>
+  <div class="snippet">{_escape(item_snippet)}</div>
   <form class="controls" method="post" action="/decision">
     <input type="hidden" name="item" value="{_escape(item_id)}">
     <div class="fields">
-      <input name="title" placeholder="Title / 标题">
-      <input name="target" placeholder="Target: knowledge or existing-slug / 目标">
-      <input name="tags" placeholder="Tags / 标签">
-      <textarea name="summary" placeholder="Summary / 摘要"></textarea>
+      <input name="title" value="{_escape(title)}" placeholder="Title / 标题">
+      <input name="target" value="{_escape(target)}" placeholder="Target: knowledge or existing-slug / 目标">
+      <input name="tags" value="{_escape(tags)}" placeholder="Tags / 标签">
+      <textarea name="summary" placeholder="Summary / 摘要">{_escape(summary)}</textarea>
     </div>
-    <textarea name="note" placeholder="Note / 备注"></textarea>
+    <textarea name="note" placeholder="Note / 备注">{_escape(note)}</textarea>
     <div class="buttons">
       <button class="primary" type="submit" name="decision" value="approve">Approve / 批准</button>
       <button class="reject" type="submit" name="decision" value="reject">Reject / 拒绝</button>
@@ -350,6 +555,16 @@ def _item_card(item: dict[str, object]) -> str:
       <button type="submit" name="decision" value="edit">Edit / 编辑后批准</button>
     </div>
   </form>
+  <details class="editor">
+    <summary>Edit Markdown / 修改正文</summary>
+    <form class="controls" method="post" action="/save-item">
+      <input type="hidden" name="item" value="{_escape(item_id)}">
+      <textarea name="body" spellcheck="false">{_escape(item_body)}</textarea>
+      <div class="buttons">
+        <button class="primary" type="submit">Save Markdown / 保存正文</button>
+      </div>
+    </form>
+  </details>
 </article>"""
 
 
@@ -385,6 +600,20 @@ def _snippet(text: str) -> str:
 
 def _form_value(data: dict[str, list[str]], key: str) -> str:
     return data.get(key, [""])[0].strip()
+
+
+def _form_text(data: dict[str, list[str]], key: str) -> str:
+    return data.get(key, [""])[0]
+
+
+def _form_values(data: dict[str, list[str]], key: str) -> list[str]:
+    return [value.strip() for value in data.get(key, []) if value.strip()]
+
+
+def _review_value(decision: object, field: str) -> str:
+    if not isinstance(decision, ItemDecision):
+        return ""
+    return str(getattr(decision, field, "")).strip()
 
 
 def _message(message: str) -> str:

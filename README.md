@@ -190,7 +190,10 @@ vibewiki review-ui --patch-dir .vibewiki/patches/<session> --port 8765
 ```
 
 Open `http://127.0.0.1:8765/` after forwarding the port. The page lets you click
-approve, reject, defer, downgrade, merge, or edit for each candidate item.
+approve, reject, defer, downgrade, merge, or edit for each candidate item. It
+also hides reviewed cards by default, supports search/kind filters, can apply
+bulk decisions to selected items, and lets you edit each candidate Markdown file
+directly before approving it.
 
 For fine-grained review, use the per-item commands shown on each card:
 

@@ -16,10 +16,11 @@ sessions.
   steps are better precision, LLM-assisted distillation, and review controls.
 - Add optional LLM-assisted distillation while keeping deterministic local
   heuristics as the fallback.
-- Continue item-level review ergonomics. The first CLI-backed
-  approve/reject/defer/downgrade/merge/edit path is implemented; next steps are
-  batch decisions, conflict previews, and stricter all-items-reviewed gates. A
-  first clickable local `review-ui` exists for SSH workflows.
+- Continue item-level review ergonomics. CLI-backed
+  approve/reject/defer/downgrade/merge/edit and the clickable SSH-friendly
+  `review-ui` are implemented. The UI now supports filtering, hiding reviewed
+  cards, batch decisions, and in-window Markdown edits. Next steps are conflict
+  previews, richer diffs, and stricter all-items-reviewed gates.
 
 ## Medium Priority
 

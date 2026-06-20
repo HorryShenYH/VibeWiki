@@ -13,7 +13,7 @@ from vibewiki.import_markdown import extract_hint_lines, import_markdown_session
 from vibewiki.import_url import chatgpt_share_to_markdown, html_to_markdown, import_url_session
 from vibewiki.merge import merge_patches
 from vibewiki.project import init_project
-from vibewiki.review import read_item_decisions, record_item_decision, review_patches
+from vibewiki.review import read_item_decisions, record_item_decision, review_patches, update_item_body
 from vibewiki.review_board import generate_review_board
 from vibewiki.review_ui import render_review_ui
 from vibewiki.retrieval import answer_question, build_context_pack, search_memory
@@ -551,6 +551,11 @@ python3 compare_outputs.py
             self.assertIn("VibeWiki Review / 审核", ui_html)
             self.assertIn("Approve / 批准", ui_html)
             self.assertIn('action="/decision"', ui_html)
+            self.assertIn('action="/bulk-decision"', ui_html)
+            self.assertIn('action="/save-item"', ui_html)
+            self.assertIn("Hide reviewed / 隐藏已审", ui_html)
+            self.assertIn("Save Markdown / 保存正文", ui_html)
+            self.assertIn("setTimeout", ui_html)
             self.assertIn("matlab-gold-vemu-compare", ui_html)
 
     def test_item_level_review_decisions_affect_merge(self) -> None:
@@ -582,6 +587,32 @@ Verification reports `max_abs_diff=0`, `bad_abs_gt_1=0`, and MATLAB gold matched
 
             session = import_markdown_session(root, source)
             patches = distill_session(root, session_dir=session.session_dir)
+            editable_item = "skilllets/matlab-gold-vemu-compare.md"
+            edited_body = """# MATLAB Gold VEMU Compare
+
+Status: candidate
+Kind: skilllet
+
+## Summary
+
+Reviewer edited this candidate directly in the review UI.
+"""
+            edited_path = update_item_body(
+                root,
+                patch_dir=patches.patch_dir,
+                item=editable_item,
+                body=edited_body,
+            )
+            self.assertEqual(edited_path, patches.patch_dir / editable_item)
+            self.assertIn("Reviewer edited", edited_path.read_text(encoding="utf-8"))
+
+            with self.assertRaises(ValueError):
+                update_item_body(
+                    root,
+                    patch_dir=patches.patch_dir,
+                    item="../escape.md",
+                    body="nope",
+                )
 
             record_item_decision(
                 root,

@@ -85,3 +85,26 @@ language:
 New project Wiki seed pages now use bilingual headings and short bilingual
 descriptions. The policy is to keep the user's natural working language while
 adding enough Chinese/English structure for humans and agents to navigate.
+
+## 2026-06-20 Review UI Ergonomics
+
+Dogfooding the first `review-ui` exposed two usability problems: approving an
+item did not make the pending queue feel smaller, and editing candidates still
+required leaving the browser window.
+
+The review UI now treats item review as a working queue:
+
+- reviewed cards are hidden by default, so approve/reject/defer immediately
+  removes them from the visible pending list
+- the success message fades away automatically after a short delay
+- search and kind filters help narrow large candidate patches
+- selected items can be approved, rejected, or deferred in bulk
+- each candidate card has an in-window Markdown editor that writes back to the
+  candidate file under `.vibewiki/patches/`
+
+The saved Markdown remains candidate memory until a human records item-level or
+patch-level approval and runs `merge`.
+
+Verification:
+
+- `python3 -m unittest discover -s tests` passed with 20 tests.
