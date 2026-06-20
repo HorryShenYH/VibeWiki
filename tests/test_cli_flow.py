@@ -15,6 +15,7 @@ from vibewiki.merge import merge_patches
 from vibewiki.project import init_project
 from vibewiki.review import read_item_decisions, record_item_decision, review_patches
 from vibewiki.review_board import generate_review_board
+from vibewiki.review_ui import render_review_ui
 from vibewiki.retrieval import answer_question, build_context_pack, search_memory
 from vibewiki.validate import validate_skill_file, validate_skill_text
 
@@ -38,6 +39,9 @@ class VibeWikiFlowTest(unittest.TestCase):
             self.assertTrue((root / "docs" / "wiki" / "directions.md").exists())
             self.assertTrue((root / ".vibewiki" / "skill_registry.yaml").exists())
             self.assertIn(".vibewiki/cache/", (root / ".gitignore").read_text(encoding="utf-8"))
+            config_text = (root / ".vibewiki" / "config.yaml").read_text(encoding="utf-8")
+            self.assertIn("mode: bilingual", config_text)
+            self.assertIn("primary: zh", config_text)
 
             session = capture_session(
                 root,
@@ -542,6 +546,12 @@ python3 compare_outputs.py
             self.assertIn("review --patch-dir", html)
             self.assertIn("review-item", html)
             self.assertIn("merge --patch-dir", html)
+
+            ui_html = render_review_ui(root, patch_dir=patches.patch_dir)
+            self.assertIn("VibeWiki Review / 审核", ui_html)
+            self.assertIn("Approve / 批准", ui_html)
+            self.assertIn('action="/decision"', ui_html)
+            self.assertIn("matlab-gold-vemu-compare", ui_html)
 
     def test_item_level_review_decisions_affect_merge(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

@@ -56,3 +56,32 @@ reusable units become approved memory.
 Verification:
 
 - `python3 -m unittest discover -s tests` passed with 20 tests.
+
+## 2026-06-20 Clickable Review UI And Bilingual Mode
+
+The static `review_board.html` was not ergonomic enough for SSH-based
+development because it still required copying `review-item` commands. VibeWiki
+now provides `vibewiki review-ui`, a local-only HTTP review surface designed for
+VSCode Remote-SSH port forwarding.
+
+The review UI lets a human click item decisions directly:
+
+- approve
+- reject
+- defer
+- downgrade
+- merge into an existing target
+- edit title, summary, tags, or note
+
+VibeWiki also records bilingual Wiki intent in `.vibewiki/config.yaml`:
+
+```yaml
+language:
+  mode: bilingual
+  primary: zh
+  secondary: en
+```
+
+New project Wiki seed pages now use bilingual headings and short bilingual
+descriptions. The policy is to keep the user's natural working language while
+adding enough Chinese/English structure for humans and agents to navigate.

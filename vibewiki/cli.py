@@ -12,6 +12,7 @@ from .merge import merge_patches
 from .project import init_project
 from .review import patch_summary, record_item_decision, review_patches
 from .review_board import generate_review_board
+from .review_ui import serve_review_ui
 from .retrieval import answer_question, build_context_pack, format_search_results, search_memory
 from .validate import default_skill_path, validate_skill_file
 
@@ -167,6 +168,14 @@ def build_parser() -> argparse.ArgumentParser:
     )
     review_board.add_argument("--patch-dir", default=None, help="Specific patch directory to render.")
     review_board.add_argument("--output", default=None, help="HTML file to write.")
+
+    review_ui = subparsers.add_parser(
+        "review-ui",
+        help="Serve a clickable local review UI for candidate patches.",
+    )
+    review_ui.add_argument("--patch-dir", default=None, help="Specific patch directory to review.")
+    review_ui.add_argument("--host", default="127.0.0.1", help="Host to bind. Defaults to 127.0.0.1.")
+    review_ui.add_argument("--port", type=int, default=8765, help="Port to bind. Defaults to 8765.")
 
     merge = subparsers.add_parser("merge", help="Merge approved patches into project memory.")
     merge.add_argument("--patch-dir", default=None, help="Specific patch directory to merge.")
@@ -363,6 +372,11 @@ def run(args: argparse.Namespace) -> int:
         output = _path(args.output) if args.output else None
         board = generate_review_board(project, patch_dir=patch_dir, output=output)
         print(f"Generated review board: {board}")
+        return 0
+
+    if args.subcommand == "review-ui":
+        patch_dir = _path(args.patch_dir) if args.patch_dir else None
+        serve_review_ui(project, patch_dir=patch_dir, host=args.host, port=args.port)
         return 0
 
     if args.subcommand == "merge":

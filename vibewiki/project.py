@@ -15,6 +15,11 @@ prompt_patterns_dir: skills/prompt_patterns
 workflows_dir: skills/workflows
 agent_rule_files:
   - AGENTS.md
+language:
+  mode: bilingual
+  primary: zh
+  secondary: en
+  write_policy: keep-user-language-with-brief-bilingual-summary
 review:
   require_human_approval: true
 distill:
@@ -41,12 +46,14 @@ embedding:
   model_env: VIBEWIKI_EMBEDDING_MODEL
 """
 
-WIKI_INDEX = """# Project Wiki
+WIKI_INDEX = """# Project Wiki / 项目 Wiki
 
 This Wiki contains human-reviewed project memory generated from VibeWiki
 sessions.
 
-## Pages
+这个 Wiki 保存由 VibeWiki 会话生成、并经过人工审核的项目记忆。
+
+## Pages / 页面
 
 - [Development Notes](development_notes.md)
 - [Knowledge](knowledge.md)
@@ -57,44 +64,58 @@ sessions.
 - [Directions](directions.md)
 """
 
-DEVELOPMENT_NOTES = """# Development Notes
+DEVELOPMENT_NOTES = """# Development Notes / 开发记录
 
 Reviewed VibeWiki knowledge patches will be appended here.
+
+经过审核的 VibeWiki 知识补丁会追加到这里。
 """
 
-KNOWN_ISSUES = """# Known Issues
+KNOWN_ISSUES = """# Known Issues / 已知问题
 
 Use this page for verified recurring issues, deprecated workarounds, and
 important caveats.
+
+用于记录已验证的反复问题、废弃 workaround 和重要注意事项。
 """
 
-KNOWLEDGE = """# Knowledge
+KNOWLEDGE = """# Knowledge / 知识
 
 Reviewed facts, explanations, and project memory that are useful but not
 necessarily executable skills.
+
+记录经过审核的事实、解释和项目记忆；它们有用，但不一定是可执行 skill。
 """
 
-TODOS = """# Todos
+TODOS = """# Todos / 待办
 
 Reviewed follow-up tasks, loose ends, and deferred work discovered during
 sessions.
+
+记录会话中发现、经过审核的后续任务、遗留问题和延后事项。
 """
 
-IDEAS = """# Ideas
+IDEAS = """# Ideas / 想法
 
 Reviewed ideas and sparks worth keeping even when they are not immediately
 actionable.
+
+记录值得保留的想法和灵感，即使它们暂时还不能立即执行。
 """
 
-RESEARCH_NOTES = """# Research Notes
+RESEARCH_NOTES = """# Research Notes / 研究笔记
 
 Reviewed hypotheses, experiment notes, references, and research-oriented
 observations.
+
+记录经过审核的假设、实验笔记、参考资料和研究型观察。
 """
 
-DIRECTIONS = """# Directions
+DIRECTIONS = """# Directions / 方向
 
 Reviewed project or research directions that may shape future work.
+
+记录可能影响后续工作的项目方向或研究方向。
 """
 
 SKILLS_INDEX = """# Skills

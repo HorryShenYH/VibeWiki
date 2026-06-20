@@ -23,6 +23,7 @@ The first version is intentionally local and conservative:
 - `vibewiki import-url` imports a shared conversation URL, including ChatGPT share links.
 - `vibewiki distill` creates candidate memory patches.
 - `vibewiki review-board` renders a local HTML review board for candidate patches.
+- `vibewiki review-ui` serves a clickable local review UI for SSH/remote workflows.
 - `vibewiki validate-skill` checks Skill Patch quality gates.
 - `vibewiki review` records human approval.
 - `vibewiki review-item` records item-level approve/reject/defer/downgrade/merge/edit decisions.
@@ -34,6 +35,17 @@ The first version is intentionally local and conservative:
 VibeWiki does not directly mutate your main knowledge base before review. Facts
 start as candidates, uncertain claims stay marked, and missing context becomes
 questions for a human.
+
+VibeWiki can run in bilingual mode. The default project configuration keeps the
+user's working language while adding brief bilingual structure for Wiki pages
+and review surfaces:
+
+```yaml
+language:
+  mode: bilingual
+  primary: zh
+  secondary: en
+```
 
 ## What It Does
 
@@ -168,6 +180,17 @@ draft, not as final truth.
 groups findings, candidate skilllets, prompt patterns, workflows, open
 questions, merge suggestions, and approve/merge commands into one page so review
 does not require opening a directory full of Markdown files one by one.
+
+For remote development over SSH, `review-ui` is usually easier than opening the
+static HTML. It starts a local-only server that VSCode Remote-SSH can forward to
+your browser:
+
+```bash
+vibewiki review-ui --patch-dir .vibewiki/patches/<session> --port 8765
+```
+
+Open `http://127.0.0.1:8765/` after forwarding the port. The page lets you click
+approve, reject, defer, downgrade, merge, or edit for each candidate item.
 
 For fine-grained review, use the per-item commands shown on each card:
 

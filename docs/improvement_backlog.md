@@ -82,7 +82,25 @@ candidate card can show commands for recording human decisions at item level:
 
 Remaining improvements: make these controls directly interactive in the review
 UI, add batch decisions, show merge previews/conflicts, and optionally require
-all items to be explicitly reviewed before merge.
+all items to be explicitly reviewed before merge. A first clickable local
+`review-ui` now exists for SSH/browser workflows.
+
+### Bilingual Wiki Mode
+
+VibeWiki should support Chinese/English mixed work as a first-class mode. The
+initial configuration now records:
+
+- `language.mode: bilingual`
+- `language.primary: zh`
+- `language.secondary: en`
+
+Remaining improvements:
+
+- language-aware distillation prompts and LLM calls
+- bilingual section aliases for retrieval
+- optional `ask --language zh|en|bilingual`
+- review UI language switch
+- better bilingual templates for public docs and project Wikis
 
 ## Medium Priority Improvements
 

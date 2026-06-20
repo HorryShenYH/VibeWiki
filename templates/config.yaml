@@ -4,6 +4,11 @@ wiki_dir: docs/wiki
 skills_dir: skills
 agent_rule_files:
   - AGENTS.md
+language:
+  mode: bilingual
+  primary: zh
+  secondary: en
+  write_policy: keep-user-language-with-brief-bilingual-summary
 review:
   require_human_approval: true
 distill:

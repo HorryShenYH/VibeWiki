@@ -18,8 +18,8 @@ sessions.
   heuristics as the fallback.
 - Continue item-level review ergonomics. The first CLI-backed
   approve/reject/defer/downgrade/merge/edit path is implemented; next steps are
-  form-style review UI, batch decisions, conflict previews, and stricter
-  all-items-reviewed gates.
+  batch decisions, conflict previews, and stricter all-items-reviewed gates. A
+  first clickable local `review-ui` exists for SSH workflows.
 
 ## Medium Priority
 
@@ -28,6 +28,8 @@ sessions.
 - Add optional reranking for `search`, `ask`, and `context`.
 - Add `wiki_search` and `wiki_read` style machine-facing surfaces for agents.
 - Add `export --format llms-full` for compact project context export.
+- Improve bilingual wiki behavior beyond seed pages: bilingual section aliases,
+  language-aware prompts, and optional answer language control.
 - Add skilllet versioning, deprecation, supersession, conflict detection, and a
   changelog for merged memory units.
 - Add CI, package/release workflow, privacy/security docs, and `vibewiki doctor`.
