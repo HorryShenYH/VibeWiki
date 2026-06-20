@@ -11,7 +11,7 @@ from .registry import (
     registry_path,
     write_registry,
 )
-from .review import latest_patch_dir
+from .review import ItemDecision, latest_patch_dir, read_item_decisions
 from .text_utils import append_marked_section, read_text_if_exists
 
 
@@ -36,12 +36,115 @@ def _approved(project: Path, session_id: str) -> bool:
     return "decision: approved" in read_text_if_exists(review_file)
 
 
+def _decision_for(
+    patch_dir: Path,
+    source: Path,
+    decisions: dict[str, ItemDecision],
+) -> ItemDecision | None:
+    try:
+        item_id = source.resolve().relative_to(patch_dir.resolve()).as_posix()
+    except ValueError:
+        return None
+    return decisions.get(item_id)
+
+
+def _skip_decision(decision: ItemDecision | None) -> bool:
+    return bool(decision and decision.decision in {"reject", "defer"})
+
+
+def _approved_body(body: str, decision: ItemDecision | None) -> str:
+    if not decision:
+        return body
+    updated = body
+    if decision.decision in {"approve", "edit", "downgrade", "merge"}:
+        updated = updated.replace("Status: candidate", "Status: approved", 1)
+    if decision.title:
+        updated = _replace_first_heading(updated, decision.title)
+    if decision.summary:
+        updated = _replace_section(updated, "Summary", decision.summary)
+
+    review_lines = [
+        "## Review Decision",
+        "",
+        f"- Decision: {decision.decision}",
+    ]
+    if decision.target:
+        review_lines.append(f"- Target: {decision.target}")
+    if decision.tags:
+        review_lines.append(f"- Tags: {decision.tags}")
+    if decision.note:
+        review_lines.append(f"- Note: {decision.note}")
+    review_block = "\n".join(review_lines)
+    if "## Review Decision" not in updated:
+        updated = f"{updated.rstrip()}\n\n{review_block}\n"
+    return updated
+
+
+def _replace_first_heading(markdown: str, title: str) -> str:
+    lines = markdown.splitlines()
+    for index, line in enumerate(lines):
+        if line.startswith("# "):
+            lines[index] = f"# {title}"
+            return "\n".join(lines) + ("\n" if markdown.endswith("\n") else "")
+    return f"# {title}\n\n{markdown}"
+
+
+def _replace_section(markdown: str, section: str, value: str) -> str:
+    lines = markdown.splitlines()
+    header = f"## {section}"
+    for index, line in enumerate(lines):
+        if line.strip() != header:
+            continue
+        end = len(lines)
+        for next_index in range(index + 1, len(lines)):
+            if lines[next_index].startswith("## "):
+                end = next_index
+                break
+        replacement = [header, "", value]
+        return "\n".join([*lines[:index], *replacement, *lines[end:]]) + "\n"
+    return f"{markdown.rstrip()}\n\n{header}\n\n{value}\n"
+
+
+def _target_wiki_file(root: Path, default_kind: str, target: str) -> Path:
+    clean = target.strip()
+    if not clean:
+        return root / "docs" / "wiki" / FINDING_WIKI_FILES.get(default_kind, "knowledge.md")
+    if clean in FINDING_WIKI_FILES:
+        return root / "docs" / "wiki" / FINDING_WIKI_FILES[clean]
+    path = Path(clean)
+    if path.suffix == ".md":
+        return path if path.is_absolute() else root / path
+    if clean in {"known_issues", "known-issues"}:
+        return root / "docs" / "wiki" / "known_issues.md"
+    return root / "docs" / "wiki" / FINDING_WIKI_FILES.get(default_kind, "knowledge.md")
+
+
+def _merge_downgraded_item(
+    root: Path,
+    source: Path,
+    session_id: str,
+    decision: ItemDecision,
+    default_kind: str = "knowledge",
+) -> list[Path]:
+    body = _approved_body(read_text_if_exists(source), decision)
+    if not body:
+        return []
+    target_kind = decision.target if decision.target in FINDING_WIKI_FILES else default_kind
+    target = _target_wiki_file(root, target_kind, decision.target)
+    slug = source.stem
+    marker = f"<!-- vibewiki:{session_id}:downgraded:{source.parent.name}:{slug} -->"
+    if append_marked_section(target, marker, body):
+        return [target]
+    return []
+
+
 def _merge_unit_dir(
     root: Path,
     patch_dir: Path,
     session_id: str,
     name: str,
     registry_entries: dict,
+    decisions: dict[str, ItemDecision],
 ) -> list[Path]:
     source_dir = patch_dir / name
     if not source_dir.exists():
@@ -53,13 +156,19 @@ def _merge_unit_dir(
     for source in sorted(source_dir.glob("*.md")):
         if source.name == "index.md":
             continue
-        body = read_text_if_exists(source)
+        decision = _decision_for(patch_dir, source, decisions)
+        if _skip_decision(decision):
+            continue
+        if decision and decision.decision == "downgrade":
+            changed.extend(_merge_downgraded_item(root, source, session_id, decision))
+            continue
+        body = _approved_body(read_text_if_exists(source), decision)
         if not body:
             continue
-        slug = source.stem
+        slug = _target_unit_slug(source.stem, decision)
         kind, title, keywords = extract_unit_metadata(body, slug)
-        target = destination_dir / source.name
-        marker = f"<!-- vibewiki:{session_id}:{unit_label}:{slug} -->"
+        target = destination_dir / f"{slug}.md"
+        marker = f"<!-- vibewiki:{session_id}:{unit_label}:{source.stem}:to:{slug} -->"
         if append_marked_section(target, marker, body):
             changed.append(target)
         merge_registry_entry(
@@ -73,13 +182,25 @@ def _merge_unit_dir(
 
         index = destination_dir / "index.md"
         index_marker = f"<!-- vibewiki:{unit_label}:{slug}:index -->"
-        index_body = f"- [{slug}]({source.name})"
+        index_body = f"- [{slug}]({slug}.md)"
         if append_marked_section(index, index_marker, index_body):
             changed.append(index)
     return changed
 
 
-def _merge_findings(root: Path, patch_dir: Path, session_id: str) -> list[Path]:
+def _target_unit_slug(default_slug: str, decision: ItemDecision | None) -> str:
+    if not decision or decision.decision != "merge" or not decision.target:
+        return default_slug
+    target = decision.target.strip()
+    return Path(target).stem
+
+
+def _merge_findings(
+    root: Path,
+    patch_dir: Path,
+    session_id: str,
+    decisions: dict[str, ItemDecision],
+) -> list[Path]:
     source_dir = patch_dir / "findings"
     if not source_dir.exists():
         return []
@@ -88,15 +209,24 @@ def _merge_findings(root: Path, patch_dir: Path, session_id: str) -> list[Path]:
     for source in sorted(source_dir.glob("*.md")):
         if source.name == "index.md":
             continue
-        body = read_text_if_exists(source)
+        decision = _decision_for(patch_dir, source, decisions)
+        if _skip_decision(decision):
+            continue
+        body = _approved_body(read_text_if_exists(source), decision)
         if not body:
             continue
         if "__" in source.stem:
             kind, slug = source.stem.split("__", 1)
         else:
             kind, slug = "knowledge", source.stem
+        if decision and decision.decision == "downgrade" and decision.target in FINDING_WIKI_FILES:
+            kind = decision.target
         wiki_file = FINDING_WIKI_FILES.get(kind, "knowledge.md")
-        target = root / "docs" / "wiki" / wiki_file
+        target = (
+            _target_wiki_file(root, kind, decision.target)
+            if decision and decision.decision in {"downgrade", "merge"}
+            else root / "docs" / "wiki" / wiki_file
+        )
         marker = f"<!-- vibewiki:{session_id}:finding:{kind}:{slug} -->"
         if append_marked_section(target, marker, body):
             changed.append(target)
@@ -119,6 +249,7 @@ def merge_patches(
             f"Patch {session_id} is not approved. Run `vibewiki review --approve` first."
         )
 
+    item_decisions = read_item_decisions(root, session_id)
     knowledge = read_text_if_exists(selected_patch_dir / "knowledge_patch.md")
     skill = read_text_if_exists(selected_patch_dir / "skill_patch.md")
     agent_rules = read_text_if_exists(selected_patch_dir / "agent_rule_patch.md")
@@ -141,9 +272,18 @@ def merge_patches(
         changed.append(skill_file)
     if append_marked_section(agents_file, agent_marker, agent_rules):
         changed.append(agents_file)
-    changed.extend(_merge_findings(root, selected_patch_dir, session_id))
+    changed.extend(_merge_findings(root, selected_patch_dir, session_id, item_decisions))
     for unit_dir in UNIT_DIRS:
-        changed.extend(_merge_unit_dir(root, selected_patch_dir, session_id, unit_dir, registry_entries))
+        changed.extend(
+            _merge_unit_dir(
+                root,
+                selected_patch_dir,
+                session_id,
+                unit_dir,
+                registry_entries,
+                item_decisions,
+            )
+        )
     write_registry(registry_file, registry_entries)
     if read_text_if_exists(registry_file) != registry_before:
         changed.append(registry_file)

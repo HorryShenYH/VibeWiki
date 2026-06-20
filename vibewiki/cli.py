@@ -10,7 +10,7 @@ from .import_markdown import import_markdown_session
 from .import_url import import_url_session
 from .merge import merge_patches
 from .project import init_project
-from .review import patch_summary, review_patches
+from .review import patch_summary, record_item_decision, review_patches
 from .review_board import generate_review_board
 from .retrieval import answer_question, build_context_pack, format_search_results, search_memory
 from .validate import default_skill_path, validate_skill_file
@@ -138,6 +138,28 @@ def build_parser() -> argparse.ArgumentParser:
     review.add_argument("--patch-dir", default=None, help="Specific patch directory to review.")
     review.add_argument("--approve", action="store_true", help="Mark the patch as human-approved.")
     review.add_argument("--notes", default="", help="Review notes.")
+
+    review_item = subparsers.add_parser(
+        "review-item",
+        help="Record an item-level decision for a candidate finding or reusable unit.",
+    )
+    review_item.add_argument("--patch-dir", default=None, help="Specific patch directory to review.")
+    review_item.add_argument("--item", required=True, help="Item path relative to the patch directory.")
+    review_item.add_argument(
+        "--decision",
+        required=True,
+        choices=["approve", "reject", "defer", "downgrade", "merge", "edit"],
+        help="Decision for this candidate item.",
+    )
+    review_item.add_argument(
+        "--target",
+        default="",
+        help="Target type or existing unit slug/path for downgrade or merge decisions.",
+    )
+    review_item.add_argument("--title", default="", help="Edited title to apply during merge.")
+    review_item.add_argument("--summary", default="", help="Edited summary to apply during merge.")
+    review_item.add_argument("--tags", default="", help="Comma-separated tags to record.")
+    review_item.add_argument("--note", default="", help="Reviewer note for this item.")
 
     review_board = subparsers.add_parser(
         "review-board",
@@ -314,6 +336,26 @@ def run(args: argparse.Namespace) -> int:
         )
         decision = "approved" if args.approve else "needs_review"
         print(f"Review recorded ({decision}): {review_paths.review_file}")
+        return 0
+
+    if args.subcommand == "review-item":
+        patch_dir = _path(args.patch_dir) if args.patch_dir else None
+        decisions_file = record_item_decision(
+            project,
+            patch_dir=patch_dir,
+            item=args.item,
+            decision=args.decision,
+            target=args.target,
+            title=args.title,
+            summary=args.summary,
+            tags=args.tags,
+            note=args.note,
+        )
+        print(f"Item review recorded: {decisions_file}")
+        print(f"- item: {args.item}")
+        print(f"- decision: {args.decision}")
+        if args.target:
+            print(f"- target: {args.target}")
         return 0
 
     if args.subcommand == "review-board":

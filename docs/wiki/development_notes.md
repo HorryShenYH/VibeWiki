@@ -35,3 +35,24 @@ Verification:
 
 - `python3 -m unittest discover -s tests` passed with 19 tests.
 - The self-review session was re-distilled and `review_board.html` regenerated.
+
+## 2026-06-20 Item-Level Review Decisions
+
+VibeWiki now records per-item review decisions with `vibewiki review-item`.
+Supported decisions are:
+
+- `approve`: merge the candidate item normally
+- `reject`: skip the candidate during merge
+- `defer`: keep the candidate local but skip it during merge
+- `downgrade`: write a reusable-unit candidate into the Wiki instead of skills
+- `merge`: append a reusable-unit candidate to an existing target slug
+- `edit`: merge with reviewer-provided title, summary, tags, or note
+
+The static `review_board.html` now shows item-level commands on each candidate
+card and displays recorded decisions. Merge still requires patch-level approval,
+but it now respects item-level decisions when deciding which findings and
+reusable units become approved memory.
+
+Verification:
+
+- `python3 -m unittest discover -s tests` passed with 20 tests.

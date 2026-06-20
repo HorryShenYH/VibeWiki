@@ -71,14 +71,18 @@ Needed improvements:
 
 ### Review Experience
 
-`review-board` is useful but still read-only. The next useful step is to record
-human decisions at item level:
+`review-board` now supports a first CLI-backed item-decision loop. Each
+candidate card can show commands for recording human decisions at item level:
 
 - approve or reject a finding
 - downgrade a candidate skilllet to knowledge
 - merge a candidate skilllet into an existing skilllet
 - mark a candidate as deferred
 - edit title, tags, and summary before merge
+
+Remaining improvements: make these controls directly interactive in the review
+UI, add batch decisions, show merge previews/conflicts, and optionally require
+all items to be explicitly reviewed before merge.
 
 ## Medium Priority Improvements
 

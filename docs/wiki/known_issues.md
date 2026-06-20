@@ -20,5 +20,5 @@ evidence heuristics are more naturally structured.
 Update on 2026-06-19: partially addressed. The local distiller now extracts
 discussion bullets and section summaries into typed candidate findings, and it
 avoids generating a broad session-sized skilllet for discussion-like sessions.
-Remaining gaps: the rules are still heuristic, item-level review is still
-missing, and LLM-assisted distillation is not implemented yet.
+Remaining gaps: the rules are still heuristic, item-level review has only a
+CLI-backed command flow, and LLM-assisted distillation is not implemented yet.

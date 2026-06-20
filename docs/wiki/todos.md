@@ -16,8 +16,10 @@ sessions.
   steps are better precision, LLM-assisted distillation, and review controls.
 - Add optional LLM-assisted distillation while keeping deterministic local
   heuristics as the fallback.
-- Add item-level review decisions: approve, reject, defer, downgrade to
-  knowledge, merge into an existing unit, and edit title/tags/summary.
+- Continue item-level review ergonomics. The first CLI-backed
+  approve/reject/defer/downgrade/merge/edit path is implemented; next steps are
+  form-style review UI, batch decisions, conflict previews, and stricter
+  all-items-reviewed gates.
 
 ## Medium Priority
 

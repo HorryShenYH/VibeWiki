@@ -13,7 +13,7 @@ from vibewiki.import_markdown import extract_hint_lines, import_markdown_session
 from vibewiki.import_url import chatgpt_share_to_markdown, html_to_markdown, import_url_session
 from vibewiki.merge import merge_patches
 from vibewiki.project import init_project
-from vibewiki.review import review_patches
+from vibewiki.review import read_item_decisions, record_item_decision, review_patches
 from vibewiki.review_board import generate_review_board
 from vibewiki.retrieval import answer_question, build_context_pack, search_memory
 from vibewiki.validate import validate_skill_file, validate_skill_text
@@ -540,7 +540,117 @@ python3 compare_outputs.py
             self.assertIn("matlab-gold-vemu-compare", html)
             self.assertIn("vibewiki --project", html)
             self.assertIn("review --patch-dir", html)
+            self.assertIn("review-item", html)
             self.assertIn("merge --patch-dir", html)
+
+    def test_item_level_review_decisions_affect_merge(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = root / "item_review_session.md"
+            source.write_text(
+                """# Item Level Review
+
+We need a MATLAB Agent task package from `vemu_dag_summary.json`.
+The remote worker must produce `run_vemu_gold.m` and `config_schema.json`.
+
+Windows SSH note: the user is in Administrators, so OpenSSH reads
+`administrators_authorized_keys` under the `Match Group administrators` rule.
+`sshpass` is only for first login.
+
+MATLAB reference: use `nrSymbolModulate` and `nrSymbolDemodulate`.
+BAS `char` values are signed int8 byte patterns: `255 -> -1`.
+The C build has `-fno-signed-char`, so convert explicitly.
+
+Generated cases live in `generated_bas`, then materialize one `TARGET_DAG`
+per case and compare `DAGRet_demod.log`.
+For F5 set `VENUSROW=128` and `VENUSLANE=16` in `config.mk`.
+
+Verification reports `max_abs_diff=0`, `bad_abs_gt_1=0`, and MATLAB gold matched.
+""",
+                encoding="utf-8",
+            )
+
+            session = import_markdown_session(root, source)
+            patches = distill_session(root, session_dir=session.session_dir)
+
+            record_item_decision(
+                root,
+                patch_dir=patches.patch_dir,
+                item="prompt_patterns/remote-matlab-agent-task-package.md",
+                decision="approve",
+                note="Good reusable prompt pattern.",
+            )
+            record_item_decision(
+                root,
+                patch_dir=patches.patch_dir,
+                item="skilllets/windows-ssh-key-for-admin-worker.md",
+                decision="reject",
+                note="Do not keep Windows SSH guidance for this project.",
+            )
+            record_item_decision(
+                root,
+                patch_dir=patches.patch_dir,
+                item="workflows/materialize-vemu-replay-cases.md",
+                decision="defer",
+                note="Needs a better example before merge.",
+            )
+            record_item_decision(
+                root,
+                patch_dir=patches.patch_dir,
+                item="skilllets/bas-char-signed-int8.md",
+                decision="downgrade",
+                target="knowledge",
+                title="BAS Signed Int8 Knowledge",
+                summary="Keep this as knowledge until it becomes a reusable skilllet.",
+            )
+            record_item_decision(
+                root,
+                patch_dir=patches.patch_dir,
+                item="skilllets/matlab-gold-vemu-compare.md",
+                decision="merge",
+                target="existing-compare",
+                title="Existing Compare Skill",
+                summary="Use this edited comparison summary.",
+            )
+            record_item_decision(
+                root,
+                patch_dir=patches.patch_dir,
+                item="skilllets/vemu-f5-venus-128x16.md",
+                decision="edit",
+                title="Reviewed VEMU F5 Flow",
+                summary="Edited F5 summary.",
+            )
+
+            decisions = read_item_decisions(root, patches.session_id)
+            self.assertEqual(len(decisions), 6)
+
+            board = generate_review_board(root, patch_dir=patches.patch_dir)
+            board_html = board.read_text(encoding="utf-8")
+            self.assertIn("decision: merge", board_html)
+            self.assertIn("existing-compare", board_html)
+
+            review_patches(root, patch_dir=patches.patch_dir, approve=True)
+            merge_patches(root, patch_dir=patches.patch_dir)
+
+            self.assertFalse(
+                (root / "skills" / "skilllets" / "windows-ssh-key-for-admin-worker.md").exists()
+            )
+            self.assertFalse(
+                (root / "skills" / "workflows" / "materialize-vemu-replay-cases.md").exists()
+            )
+            self.assertFalse((root / "skills" / "skilllets" / "bas-char-signed-int8.md").exists())
+            self.assertIn(
+                "BAS Signed Int8 Knowledge",
+                (root / "docs" / "wiki" / "knowledge.md").read_text(encoding="utf-8"),
+            )
+            existing = root / "skills" / "skilllets" / "existing-compare.md"
+            self.assertTrue(existing.exists())
+            self.assertIn("Existing Compare Skill", existing.read_text(encoding="utf-8"))
+            self.assertIn("Use this edited comparison summary.", existing.read_text(encoding="utf-8"))
+            reviewed = root / "skills" / "skilllets" / "vemu-f5-venus-128x16.md"
+            self.assertTrue(reviewed.exists())
+            self.assertIn("Reviewed VEMU F5 Flow", reviewed.read_text(encoding="utf-8"))
+            self.assertIn("Edited F5 summary.", reviewed.read_text(encoding="utf-8"))
 
     def test_search_reads_approved_and_candidate_memory(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

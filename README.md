@@ -25,6 +25,7 @@ The first version is intentionally local and conservative:
 - `vibewiki review-board` renders a local HTML review board for candidate patches.
 - `vibewiki validate-skill` checks Skill Patch quality gates.
 - `vibewiki review` records human approval.
+- `vibewiki review-item` records item-level approve/reject/defer/downgrade/merge/edit decisions.
 - `vibewiki merge` appends approved patches to docs, skills, and agent rules.
 - `vibewiki ask` answers human questions from approved and candidate memory.
 - `vibewiki context` emits compact YAML/JSON context packs for AI agents.
@@ -167,6 +168,25 @@ draft, not as final truth.
 groups findings, candidate skilllets, prompt patterns, workflows, open
 questions, merge suggestions, and approve/merge commands into one page so review
 does not require opening a directory full of Markdown files one by one.
+
+For fine-grained review, use the per-item commands shown on each card:
+
+```bash
+vibewiki review-item --patch-dir .vibewiki/patches/<session> \
+  --item findings/todo__example.md --decision approve
+vibewiki review-item --patch-dir .vibewiki/patches/<session> \
+  --item skilllets/example.md --decision downgrade --target knowledge
+vibewiki review-item --patch-dir .vibewiki/patches/<session> \
+  --item skilllets/new-name.md --decision merge --target existing-skilllet
+vibewiki review-item --patch-dir .vibewiki/patches/<session> \
+  --item findings/idea__example.md --decision edit \
+  --title "Reviewed title" --summary "Reviewed summary"
+```
+
+Item decisions are stored as JSON under `.vibewiki/reviews/`. During `merge`,
+rejected or deferred items are skipped, downgraded items are written to the Wiki,
+merged reusable units append to the requested existing slug, and edited items
+carry the reviewed title or summary.
 
 VibeWiki also dogfoods this workflow on its own design conversations. See
 [`docs/improvement_backlog.md`](docs/improvement_backlog.md) and

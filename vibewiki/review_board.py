@@ -9,7 +9,7 @@ from pathlib import Path
 
 from .distill import parse_sections
 from .project import ensure_workspace
-from .review import latest_patch_dir
+from .review import ItemDecision, latest_patch_dir, read_item_decisions
 from .text_utils import read_text_if_exists
 
 
@@ -17,10 +17,12 @@ from .text_utils import read_text_if_exists
 class BoardItem:
     title: str
     path: Path
+    item_id: str
     kind: str
     status: str
     confidence: str
     body: str
+    decision: ItemDecision | None = None
 
 
 def generate_review_board(
@@ -43,11 +45,17 @@ def generate_review_board(
     composable_index = read_text_if_exists(selected_patch_dir / "composable_units.md")
     questions = read_text_if_exists(selected_patch_dir / "questions.md")
     merge_suggestions = read_text_if_exists(selected_patch_dir / "merge_suggestions.md")
+    decisions = read_item_decisions(root, session_id)
 
-    finding_items = _items_from_dir(selected_patch_dir / "findings", "finding")
-    skilllets = _items_from_dir(selected_patch_dir / "skilllets", "skilllet")
-    prompt_patterns = _items_from_dir(selected_patch_dir / "prompt_patterns", "prompt pattern")
-    workflows = _items_from_dir(selected_patch_dir / "workflows", "workflow")
+    finding_items = _items_from_dir(selected_patch_dir, selected_patch_dir / "findings", "finding", decisions)
+    skilllets = _items_from_dir(selected_patch_dir, selected_patch_dir / "skilllets", "skilllet", decisions)
+    prompt_patterns = _items_from_dir(
+        selected_patch_dir,
+        selected_patch_dir / "prompt_patterns",
+        "prompt pattern",
+        decisions,
+    )
+    workflows = _items_from_dir(selected_patch_dir, selected_patch_dir / "workflows", "workflow", decisions)
 
     html_text = _render_board(
         root=root,
@@ -69,7 +77,12 @@ def generate_review_board(
     return output_path
 
 
-def _items_from_dir(directory: Path, fallback_kind: str) -> list[BoardItem]:
+def _items_from_dir(
+    patch_dir: Path,
+    directory: Path,
+    fallback_kind: str,
+    decisions: dict[str, ItemDecision],
+) -> list[BoardItem]:
     if not directory.exists():
         return []
     items: list[BoardItem] = []
@@ -78,14 +91,17 @@ def _items_from_dir(directory: Path, fallback_kind: str) -> list[BoardItem]:
             continue
         text = path.read_text(encoding="utf-8")
         metadata = _front_matterish_fields(text)
+        item_id = path.resolve().relative_to(patch_dir.resolve()).as_posix()
         items.append(
             BoardItem(
                 title=_first_heading(text) or path.stem.replace("-", " ").title(),
                 path=path,
+                item_id=item_id,
                 kind=metadata.get("kind") or metadata.get("type") or fallback_kind,
                 status=metadata.get("status") or "candidate",
                 confidence=metadata.get("confidence") or "",
                 body=text,
+                decision=decisions.get(item_id),
             )
         )
     return items
@@ -271,6 +287,17 @@ def _render_board(
       white-space: pre-wrap;
       overflow-wrap: anywhere;
     }}
+    .review-commands {{
+      margin-top: 12px;
+      border-top: 1px solid var(--line);
+      padding-top: 10px;
+    }}
+    .review-commands summary {{
+      cursor: pointer;
+      color: var(--muted);
+      font-size: 12px;
+      margin-bottom: 8px;
+    }}
     .summary-row {{ display: grid; gap: 10px; }}
     .summary-row dt {{ color: var(--muted); font-size: 12px; margin-bottom: 2px; }}
     .summary-row dd {{ margin: 0; }}
@@ -339,7 +366,7 @@ def _render_board(
           {_markdown_block(findings_index)}
         </section>
         <div class="stack">
-          {_cards(finding_items, output_path)}
+          {_cards(finding_items, root, patch_dir, output_path)}
         </div>
       </div>
 
@@ -353,7 +380,7 @@ def _render_board(
           {_markdown_block(merge_suggestions)}
         </section>
         <div class="stack">
-          {_cards([*skilllets, *prompt_patterns, *workflows], output_path)}
+          {_cards([*skilllets, *prompt_patterns, *workflows], root, patch_dir, output_path)}
           {_empty(units_count, "No candidate reusable units.")}
         </div>
       </div>
@@ -368,17 +395,21 @@ def _metric(label: str, value: int, caption: str) -> str:
     return f"""<div class="metric"><strong>{value}</strong><span>{_escape(label)} - {_escape(caption)}</span></div>"""
 
 
-def _cards(items: list[BoardItem], output_path: Path) -> str:
-    return "\n".join(_card(item, output_path) for item in items)
+def _cards(items: list[BoardItem], root: Path, patch_dir: Path, output_path: Path) -> str:
+    return "\n".join(_card(item, root, patch_dir, output_path) for item in items)
 
 
-def _card(item: BoardItem, output_path: Path) -> str:
+def _card(item: BoardItem, root: Path, patch_dir: Path, output_path: Path) -> str:
     badges = [
         f'<span class="badge kind">{_escape(item.kind)}</span>',
         f'<span class="badge status">{_escape(item.status)}</span>',
     ]
     if item.confidence:
         badges.append(f'<span class="badge warn">confidence: {_escape(item.confidence)}</span>')
+    if item.decision:
+        badges.append(f'<span class="badge kind">decision: {_escape(item.decision.decision)}</span>')
+        if item.decision.target:
+            badges.append(f'<span class="badge">target: {_escape(item.decision.target)}</span>')
     return f"""<article class="card">
   <div class="card-head">
     <div>
@@ -388,7 +419,36 @@ def _card(item: BoardItem, output_path: Path) -> str:
     {_artifact_link("Open", item.path, output_path)}
   </div>
   {_markdown_block(_important_sections(item.body))}
+  {_review_command_block(item, root, patch_dir)}
 </article>"""
+
+
+def _review_command_block(item: BoardItem, root: Path, patch_dir: Path) -> str:
+    base = (
+        f"vibewiki --project {_shell_quote(root)} review-item "
+        f"--patch-dir {_shell_quote(patch_dir)} --item {_shell_quote(Path(item.item_id))}"
+    )
+    commands = [
+        f"{base} --decision approve",
+        f"{base} --decision reject --note {_shell_quote('reason')}",
+        f"{base} --decision defer --note {_shell_quote('why later')}",
+        f"{base} --decision edit --title {_shell_quote('New title')} --summary {_shell_quote('Reviewed summary')}",
+        f"{base} --decision downgrade --target knowledge",
+    ]
+    if not item.item_id.startswith("findings/"):
+        commands.append(f"{base} --decision merge --target {_shell_quote('existing-unit-slug')}")
+    current = []
+    if item.decision:
+        current = [
+            f"current decision: {item.decision.decision}",
+            f"target: {item.decision.target or 'not set'}",
+            f"note: {item.decision.note or 'none'}",
+            "",
+        ]
+    return f"""<details class="review-commands">
+  <summary>Item review commands</summary>
+  <div class="command">{_escape(chr(10).join([*current, *commands]))}</div>
+</details>"""
 
 
 def _important_sections(markdown: str) -> str:
