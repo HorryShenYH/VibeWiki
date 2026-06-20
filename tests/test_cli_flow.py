@@ -13,9 +13,14 @@ from vibewiki.import_markdown import extract_hint_lines, import_markdown_session
 from vibewiki.import_url import chatgpt_share_to_markdown, html_to_markdown, import_url_session
 from vibewiki.merge import merge_patches
 from vibewiki.project import init_project
-from vibewiki.review import read_item_decisions, record_item_decision, review_patches, update_item_body
+from vibewiki.review import (
+    read_item_decisions,
+    record_item_decision,
+    review_patches,
+    update_item_body,
+)
 from vibewiki.review_board import generate_review_board
-from vibewiki.review_ui import render_review_ui
+from vibewiki.review_ui import _markdown_to_html, render_review_ui
 from vibewiki.retrieval import answer_question, build_context_pack, search_memory
 from vibewiki.validate import validate_skill_file, validate_skill_text
 
@@ -548,15 +553,44 @@ python3 compare_outputs.py
             self.assertIn("merge --patch-dir", html)
 
             ui_html = render_review_ui(root, patch_dir=patches.patch_dir)
-            self.assertIn("VibeWiki Review / 审核", ui_html)
-            self.assertIn("Approve / 批准", ui_html)
+            self.assertIn("VibeWiki 审核", ui_html)
+            self.assertIn('data-en="VibeWiki Review"', ui_html)
+            self.assertIn('data-lang-choice="zh"', ui_html)
+            self.assertIn('data-lang-choice="en"', ui_html)
+            self.assertIn(">批准<", ui_html)
             self.assertIn('action="/decision"', ui_html)
             self.assertIn('action="/bulk-decision"', ui_html)
             self.assertIn('action="/save-item"', ui_html)
-            self.assertIn("Hide reviewed / 隐藏已审", ui_html)
-            self.assertIn("Save Markdown / 保存正文", ui_html)
+            self.assertIn("隐藏已审", ui_html)
+            self.assertIn("保存 Markdown", ui_html)
+            self.assertIn('class="preview"', ui_html)
+            self.assertIn("<h1>", ui_html)
+            self.assertIn('textarea name="body"', ui_html)
             self.assertIn("setTimeout", ui_html)
             self.assertIn("matlab-gold-vemu-compare", ui_html)
+            self.assertNotIn("Approve / 批准", ui_html)
+
+    def test_review_ui_markdown_preview_is_rendered_and_escaped(self) -> None:
+        rendered = _markdown_to_html(
+            """# Candidate Title
+
+Status: candidate
+
+- keep `inline code`
+- escape <script>alert(1)</script>
+
+```bash
+echo "# this stays code"
+```
+""",
+        )
+
+        self.assertIn("<h1>Candidate Title</h1>", rendered)
+        self.assertIn("<ul>", rendered)
+        self.assertIn("<code>inline code</code>", rendered)
+        self.assertIn("&lt;script&gt;alert(1)&lt;/script&gt;", rendered)
+        self.assertIn("echo &quot;# this stays code&quot;", rendered)
+        self.assertNotIn("<script>", rendered)
 
     def test_item_level_review_decisions_affect_merge(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

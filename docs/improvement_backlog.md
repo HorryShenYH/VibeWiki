@@ -88,6 +88,8 @@ Implemented UI improvements:
 - search and kind filters for large patches
 - batch approve/reject/defer for selected items
 - in-window Markdown editing for candidate files under `.vibewiki/patches/`
+- Chinese/English UI label switching without showing both languages at once
+- rendered Markdown previews for candidate cards
 
 Remaining improvements: show merge previews/conflicts, add richer candidate
 diffs, support safer edit history, and optionally require all items to be
@@ -107,8 +109,9 @@ Remaining improvements:
 - language-aware distillation prompts and LLM calls
 - bilingual section aliases for retrieval
 - optional `ask --language zh|en|bilingual`
-- review UI language switch
-- better bilingual templates for public docs and project Wikis
+- answer/display language controls outside the review UI
+- better templates for public docs and project Wikis that keep machine-facing
+  memory compact while allowing localized display
 
 ## Medium Priority Improvements
 

@@ -57,6 +57,22 @@ Verification:
 
 - `python3 -m unittest discover -s tests` passed with 20 tests.
 
+## 2026-06-20 Review UI Language And Markdown Preview
+
+VibeWiki now separates storage language from review display language. Candidate
+Markdown remains English project memory by default, while the review UI can
+switch visible labels, placeholders, and action text between Chinese and
+English. The page no longer displays bilingual labels such as `Approve / 批准`.
+
+Candidate cards also render Markdown previews instead of raw source snippets, so
+headings, lists, quotes, inline code, and fenced code blocks are easier to read
+during review. The raw Markdown source is still available in the expandable
+editor and is the only content written back to `.vibewiki/patches/`.
+
+Verification:
+
+- `python3 -m unittest discover -s tests` passed with 21 tests.
+
 ## 2026-06-20 Clickable Review UI And Bilingual Mode
 
 The static `review_board.html` was not ergonomic enough for SSH-based

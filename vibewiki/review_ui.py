@@ -3,6 +3,7 @@ from __future__ import annotations
 import html
 from http.server import BaseHTTPRequestHandler
 from pathlib import Path
+import re
 import socketserver
 from urllib.parse import parse_qs, urlencode
 
@@ -20,7 +21,13 @@ from .review import (
 from .text_utils import read_text_if_exists
 
 
-def render_review_ui(project: Path, *, patch_dir: Path | None = None, message: str = "") -> str:
+def render_review_ui(
+    project: Path,
+    *,
+    patch_dir: Path | None = None,
+    message: str = "",
+    message_zh: str = "",
+) -> str:
     root = project.resolve()
     ensure_workspace(root)
     selected_patch_dir = (patch_dir or latest_patch_dir(root)).resolve()
@@ -28,9 +35,7 @@ def render_review_ui(project: Path, *, patch_dir: Path | None = None, message: s
     decisions = read_item_decisions(root, session_id)
     items = _review_items(selected_patch_dir, decisions)
     kinds = sorted({str(item["kind"]) for item in items})
-    kind_options = "".join(
-        f'<option value="{_escape(kind)}">{_escape(kind)}</option>' for kind in kinds
-    )
+    kind_options = "".join(f'<option value="{_escape(kind)}">{_escape(kind)}</option>' for kind in kinds)
     session_md = read_text_if_exists(root / ".vibewiki" / "sessions" / session_id / "session.md")
     sections = parse_sections(session_md) if session_md else {}
     goal = sections.get("Goal", "Not provided.").strip()
@@ -40,7 +45,7 @@ def render_review_ui(project: Path, *, patch_dir: Path | None = None, message: s
     )
 
     return f"""<!doctype html>
-<html lang="en">
+<html lang="zh" data-default-lang="zh">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -84,6 +89,24 @@ def render_review_ui(project: Path, *, patch_dir: Path | None = None, message: s
     h2 {{ font-size: 18px; margin-bottom: 10px; }}
     h3 {{ font-size: 16px; }}
     .sub {{ color: var(--muted); margin-top: 6px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; }}
+    .top-actions {{ display: grid; gap: 10px; justify-items: end; }}
+    .language-switch {{
+      display: inline-flex;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      overflow: hidden;
+      background: #fff;
+    }}
+    .language-switch button {{
+      border: 0;
+      border-radius: 0;
+      min-height: 32px;
+      padding: 6px 10px;
+    }}
+    .language-switch button.active {{
+      background: var(--ink);
+      color: #fff;
+    }}
     .layout {{ display: grid; grid-template-columns: 320px 1fr; gap: 16px; align-items: start; }}
     .panel, .card {{
       background: var(--surface);
@@ -153,16 +176,50 @@ def render_review_ui(project: Path, *, patch_dir: Path | None = None, message: s
     .text {{ color: #202427; font-size: 13px; }}
     .text p {{ margin: 8px 0; }}
     .text ul {{ padding-left: 18px; }}
-    .snippet {{
+    .preview {{
       background: #f8fafc;
       border: 1px solid var(--line);
       border-radius: 8px;
       padding: 10px;
       margin: 12px 0;
-      max-height: 210px;
+      max-height: 340px;
       overflow: auto;
       font-size: 13px;
-      white-space: pre-wrap;
+    }}
+    .preview h1, .preview h2, .preview h3, .preview h4 {{
+      margin: 10px 0 6px;
+      line-height: 1.25;
+    }}
+    .preview h1 {{ font-size: 18px; }}
+    .preview h2 {{ font-size: 16px; }}
+    .preview h3, .preview h4 {{ font-size: 14px; }}
+    .preview p {{ margin: 8px 0; }}
+    .preview ul, .preview ol {{ margin: 8px 0; padding-left: 20px; }}
+    .preview blockquote {{
+      margin: 8px 0;
+      padding-left: 10px;
+      border-left: 3px solid var(--line);
+      color: var(--muted);
+    }}
+    .preview code {{
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 12px;
+      background: #edf2f7;
+      border-radius: 4px;
+      padding: 1px 4px;
+    }}
+    .preview pre {{
+      margin: 10px 0;
+      padding: 10px;
+      overflow: auto;
+      background: #111827;
+      color: #f9fafb;
+      border-radius: 8px;
+    }}
+    .preview pre code {{
+      background: transparent;
+      color: inherit;
+      padding: 0;
     }}
     .controls {{ display: grid; gap: 8px; margin-top: 12px; }}
     .fields {{ display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }}
@@ -232,6 +289,7 @@ def render_review_ui(project: Path, *, patch_dir: Path | None = None, message: s
     @media (max-width: 900px) {{
       main {{ padding: 16px; }}
       header {{ display: block; }}
+      .top-actions {{ justify-items: start; margin-top: 12px; }}
       .layout {{ grid-template-columns: 1fr; }}
       .toolbar-row {{ grid-template-columns: 1fr; }}
       .fields {{ grid-template-columns: 1fr; }}
@@ -243,62 +301,66 @@ def render_review_ui(project: Path, *, patch_dir: Path | None = None, message: s
   <main>
     <header>
       <div>
-        <h1>VibeWiki Review / 审核</h1>
+        <h1>{_i18n("VibeWiki Review", "VibeWiki 审核")}</h1>
         <div class="sub">{_escape(session_id)}</div>
       </div>
-      <div class="patch-actions">
-        <form method="post" action="/patch-review">
-          <button class="primary" type="submit">Approve Patch / 批准整包</button>
-        </form>
-        <form method="post" action="/merge">
-          <button class="merge" type="submit">Merge / 合并</button>
-        </form>
+      <div class="top-actions">
+        <div class="language-switch" aria-label="Language">
+          <button type="button" data-lang-choice="zh" aria-pressed="true">中文</button>
+          <button type="button" data-lang-choice="en" aria-pressed="false">English</button>
+        </div>
+        <div class="patch-actions">
+          <form method="post" action="/patch-review">
+            <button class="primary" type="submit">{_i18n("Approve Patch", "批准整包")}</button>
+          </form>
+          <form method="post" action="/merge">
+            <button class="merge" type="submit">{_i18n("Merge", "合并")}</button>
+          </form>
+        </div>
       </div>
     </header>
-    {_message(message)}
+    {_message(message, message_zh)}
     <section class="layout">
       <aside>
         <section class="panel soft">
-          <h2>Session / 会话</h2>
+          <h2>{_i18n("Session", "会话")}</h2>
           <div class="text">
-            <p><strong>Goal:</strong> {_escape(goal)}</p>
-            <p><strong>Outcome:</strong> {_escape(outcome)}</p>
-            <p><strong>Patch approved:</strong> {_escape('yes' if approved else 'no')}</p>
-            <p><strong>Items:</strong> {_escape(str(len(items)))} / <strong>Reviewed:</strong> {_escape(str(len(decisions)))}</p>
+            <p><strong>{_i18n("Goal", "目标")}:</strong> {_escape(goal)}</p>
+            <p><strong>{_i18n("Outcome", "结果")}:</strong> {_escape(outcome)}</p>
+            <p><strong>{_i18n("Patch approved", "整包已批准")}:</strong> {_i18n("yes" if approved else "no", "是" if approved else "否")}</p>
+            <p><strong>{_i18n("Items", "候选项")}:</strong> {_escape(str(len(items)))} · <strong>{_i18n("Reviewed", "已审核")}:</strong> {_escape(str(len(decisions)))}</p>
           </div>
         </section>
         <section class="panel">
-          <h2>How it works / 怎么用</h2>
+          <h2>{_i18n("Review Notes", "审核说明")}</h2>
           <div class="text">
-            <p>Reviewed cards are hidden by default. Turn off hide reviewed if you want to inspect previous decisions.</p>
-            <p>已审核卡片默认隐藏。需要回看时取消隐藏已审即可。</p>
-            <p>Open Markdown edit on any card to revise the candidate before approving it.</p>
-            <p>每张卡片都能展开 Markdown 正文，直接修改候选记忆。</p>
+            <p>{_i18n("Candidate Markdown is stored as English project memory. The review page only changes display language.", "候选 Markdown 统一作为英文项目记忆保存；审核页面只切换展示语言。")}</p>
+            <p>{_i18n("Reviewed cards are hidden by default. Open the editor when you need to revise the candidate source.", "已审核卡片默认隐藏。需要修改候选源文件时展开编辑器。")}</p>
           </div>
         </section>
       </aside>
       <section>
         <section class="panel toolbar" aria-label="Review tools">
           <div class="toolbar-row">
-            <input id="filter-text" type="search" placeholder="Search candidates / 搜索候选">
+            <input id="filter-text" type="search" placeholder="搜索候选" data-placeholder-en="Search candidates" data-placeholder-zh="搜索候选">
             <select id="filter-kind" aria-label="Kind filter">
-              <option value="">All kinds / 全部类型</option>
+              <option value="" data-i18n data-en="All kinds" data-zh="全部类型">全部类型</option>
               {kind_options}
             </select>
             <label class="inline">
               <input id="hide-reviewed" type="checkbox" checked>
-              Hide reviewed / 隐藏已审
+              {_i18n("Hide reviewed", "隐藏已审")}
             </label>
             <span id="visible-count" class="count">{_escape(str(len(items)))} / {_escape(str(len(items)))}</span>
           </div>
           <form id="bulk-form" class="bulk-row" method="post" action="/bulk-decision">
             <select name="decision" aria-label="Bulk decision">
-              <option value="approve">Approve selected / 批准所选</option>
-              <option value="reject">Reject selected / 拒绝所选</option>
-              <option value="defer">Defer selected / 稍后处理</option>
+              <option value="approve" data-i18n data-en="Approve selected" data-zh="批准所选">批准所选</option>
+              <option value="reject" data-i18n data-en="Reject selected" data-zh="拒绝所选">拒绝所选</option>
+              <option value="defer" data-i18n data-en="Defer selected" data-zh="稍后处理">稍后处理</option>
             </select>
-            <input name="note" placeholder="Bulk note / 批量备注">
-            <button class="primary" type="submit">Apply / 应用</button>
+            <input name="note" placeholder="批量备注" data-placeholder-en="Bulk note" data-placeholder-zh="批量备注">
+            <button class="primary" type="submit">{_i18n("Apply", "应用")}</button>
           </form>
         </section>
         <section class="stack">
@@ -309,6 +371,26 @@ def render_review_ui(project: Path, *, patch_dir: Path | None = None, message: s
   </main>
   <script>
     (() => {{
+      const defaultLang = document.documentElement.dataset.defaultLang || "zh";
+      const languageButtons = Array.from(document.querySelectorAll("[data-lang-choice]"));
+
+      function setLanguage(lang) {{
+        document.documentElement.lang = lang;
+        document.body.dataset.lang = lang;
+        window.localStorage.setItem("vibewiki.review.lang", lang);
+        document.querySelectorAll("[data-i18n]").forEach((node) => {{
+          node.textContent = lang === "en" ? node.dataset.en : node.dataset.zh;
+        }});
+        document.querySelectorAll("[data-placeholder-en]").forEach((node) => {{
+          node.placeholder = lang === "en" ? node.dataset.placeholderEn : node.dataset.placeholderZh;
+        }});
+        languageButtons.forEach((button) => {{
+          const active = button.dataset.langChoice === lang;
+          button.classList.toggle("active", active);
+          button.setAttribute("aria-pressed", String(active));
+        }});
+      }}
+
       const messages = document.querySelectorAll(".message");
       window.setTimeout(() => {{
         messages.forEach((message) => {{
@@ -350,10 +432,16 @@ def render_review_ui(project: Path, *, patch_dir: Path | None = None, message: s
         const checked = document.querySelectorAll('input[name="item"][form="bulk-form"]:checked');
         if (!checked.length) {{
           event.preventDefault();
-          window.alert("Select at least one item / 请至少选择一项");
+          const lang = document.body.dataset.lang || defaultLang;
+          window.alert(lang === "en" ? "Select at least one item" : "请至少选择一项");
         }}
       }});
 
+      languageButtons.forEach((button) => {{
+        button.addEventListener("click", () => setLanguage(button.dataset.langChoice || defaultLang));
+      }});
+
+      setLanguage(window.localStorage.getItem("vibewiki.review.lang") || defaultLang);
       applyFilters();
     }})();
   </script>
@@ -376,10 +464,20 @@ def serve_review_ui(
     class ReviewHandler(BaseHTTPRequestHandler):
         def do_GET(self) -> None:  # noqa: N802
             message = ""
+            message_zh = ""
             if "?" in self.path:
                 query = self.path.split("?", 1)[1]
-                message = parse_qs(query).get("message", [""])[0]
-            self._send_html(render_review_ui(root, patch_dir=selected_patch_dir, message=message))
+                parsed = parse_qs(query)
+                message = parsed.get("message", [""])[0]
+                message_zh = parsed.get("message_zh", [""])[0]
+            self._send_html(
+                render_review_ui(
+                    root,
+                    patch_dir=selected_patch_dir,
+                    message=message,
+                    message_zh=message_zh,
+                )
+            )
 
         def do_POST(self) -> None:  # noqa: N802
             length = int(self.headers.get("Content-Length", "0") or 0)
@@ -399,7 +497,10 @@ def serve_review_ui(
                         tags=_form_value(data, "tags"),
                         note=_form_value(data, "note"),
                     )
-                    self._redirect(f"Recorded {decision} for {item}")
+                    self._redirect(
+                        f"Recorded {decision} for {item}",
+                        f"已记录 {item}：{decision}",
+                    )
                     return
                 if self.path == "/bulk-decision":
                     items = _form_values(data, "item")
@@ -414,7 +515,10 @@ def serve_review_ui(
                             decision=decision,
                             note=_form_value(data, "note"),
                         )
-                    self._redirect(f"Recorded {decision} for {len(items)} items")
+                    self._redirect(
+                        f"Recorded {decision} for {len(items)} items",
+                        f"已为 {len(items)} 项记录：{decision}",
+                    )
                     return
                 if self.path == "/save-item":
                     item = _form_value(data, "item")
@@ -424,19 +528,19 @@ def serve_review_ui(
                         item=item,
                         body=_form_text(data, "body"),
                     )
-                    self._redirect(f"Saved Markdown for {item}")
+                    self._redirect(f"Saved Markdown for {item}", f"已保存 {item} 的 Markdown")
                     return
                 if self.path == "/patch-review":
                     review_patches(root, patch_dir=selected_patch_dir, approve=True)
-                    self._redirect("Patch approved")
+                    self._redirect("Patch approved", "整包已批准")
                     return
                 if self.path == "/merge":
                     changed = merge_patches(root, patch_dir=selected_patch_dir)
-                    self._redirect(f"Merged {len(changed)} files")
+                    self._redirect(f"Merged {len(changed)} files", f"已合并 {len(changed)} 个文件")
                     return
                 self.send_error(404, "Unknown action")
             except Exception as exc:
-                self._redirect(f"Error: {exc}")
+                self._redirect(f"Error: {exc}", f"错误：{exc}")
 
         def log_message(self, format: str, *args: object) -> None:
             return
@@ -449,8 +553,8 @@ def serve_review_ui(
             self.end_headers()
             self.wfile.write(encoded)
 
-        def _redirect(self, message: str) -> None:
-            target = "/?" + urlencode({"message": message})
+        def _redirect(self, message: str, message_zh: str = "") -> None:
+            target = "/?" + urlencode({"message": message, "message_zh": message_zh or message})
             self.send_response(303)
             self.send_header("Location", target)
             self.end_headers()
@@ -505,6 +609,7 @@ def _item_card(item: dict[str, object]) -> str:
     item_status = str(item["status"])
     item_snippet = str(item["snippet"])
     item_body = str(item["body"])
+    preview_html = _markdown_to_html(item_body)
     title = _review_value(decision, "title")
     target = _review_value(decision, "target")
     tags = _review_value(decision, "tags")
@@ -533,39 +638,143 @@ def _item_card(item: dict[str, object]) -> str:
     </div>
     <label class="select-item">
       <input type="checkbox" name="item" value="{_escape(item_id)}" form="bulk-form">
-      Select / 选择
+      {_i18n("Select", "选择")}
     </label>
   </div>
-  <div class="snippet">{_escape(item_snippet)}</div>
+  <div class="preview">{preview_html}</div>
   <form class="controls" method="post" action="/decision">
     <input type="hidden" name="item" value="{_escape(item_id)}">
     <div class="fields">
-      <input name="title" value="{_escape(title)}" placeholder="Title / 标题">
-      <input name="target" value="{_escape(target)}" placeholder="Target: knowledge or existing-slug / 目标">
-      <input name="tags" value="{_escape(tags)}" placeholder="Tags / 标签">
-      <textarea name="summary" placeholder="Summary / 摘要">{_escape(summary)}</textarea>
+      <input name="title" value="{_escape(title)}" placeholder="标题" data-placeholder-en="Title" data-placeholder-zh="标题">
+      <input name="target" value="{_escape(target)}" placeholder="目标：knowledge 或 existing-slug" data-placeholder-en="Target: knowledge or existing-slug" data-placeholder-zh="目标：knowledge 或 existing-slug">
+      <input name="tags" value="{_escape(tags)}" placeholder="标签" data-placeholder-en="Tags" data-placeholder-zh="标签">
+      <textarea name="summary" placeholder="摘要" data-placeholder-en="Summary" data-placeholder-zh="摘要">{_escape(summary)}</textarea>
     </div>
-    <textarea name="note" placeholder="Note / 备注">{_escape(note)}</textarea>
+    <textarea name="note" placeholder="备注" data-placeholder-en="Note" data-placeholder-zh="备注">{_escape(note)}</textarea>
     <div class="buttons">
-      <button class="primary" type="submit" name="decision" value="approve">Approve / 批准</button>
-      <button class="reject" type="submit" name="decision" value="reject">Reject / 拒绝</button>
-      <button class="defer" type="submit" name="decision" value="defer">Defer / 稍后</button>
-      <button type="submit" name="decision" value="downgrade">Downgrade / 降为知识</button>
-      <button class="merge" type="submit" name="decision" value="merge">Merge / 合入已有</button>
-      <button type="submit" name="decision" value="edit">Edit / 编辑后批准</button>
+      <button class="primary" type="submit" name="decision" value="approve">{_i18n("Approve", "批准")}</button>
+      <button class="reject" type="submit" name="decision" value="reject">{_i18n("Reject", "拒绝")}</button>
+      <button class="defer" type="submit" name="decision" value="defer">{_i18n("Defer", "稍后")}</button>
+      <button type="submit" name="decision" value="downgrade">{_i18n("Downgrade", "降为知识")}</button>
+      <button class="merge" type="submit" name="decision" value="merge">{_i18n("Merge into existing", "合入已有")}</button>
+      <button type="submit" name="decision" value="edit">{_i18n("Approve with edits", "编辑后批准")}</button>
     </div>
   </form>
   <details class="editor">
-    <summary>Edit Markdown / 修改正文</summary>
+    <summary>{_i18n("Edit Markdown Source", "编辑 Markdown 源码")}</summary>
     <form class="controls" method="post" action="/save-item">
       <input type="hidden" name="item" value="{_escape(item_id)}">
       <textarea name="body" spellcheck="false">{_escape(item_body)}</textarea>
       <div class="buttons">
-        <button class="primary" type="submit">Save Markdown / 保存正文</button>
+        <button class="primary" type="submit">{_i18n("Save Markdown", "保存 Markdown")}</button>
       </div>
     </form>
   </details>
 </article>"""
+
+
+def _i18n(en: str, zh: str) -> str:
+    return f'<span data-i18n data-en="{_escape(en)}" data-zh="{_escape(zh)}">{_escape(zh)}</span>'
+
+
+def _markdown_to_html(text: str) -> str:
+    lines = text.splitlines()
+    html_lines: list[str] = []
+    paragraph: list[str] = []
+    list_items: list[str] = []
+    ordered_items: list[str] = []
+    code_lines: list[str] = []
+    in_code = False
+
+    def flush_paragraph() -> None:
+        if not paragraph:
+            return
+        html_lines.append(f"<p>{_inline_markdown(' '.join(paragraph))}</p>")
+        paragraph.clear()
+
+    def flush_lists() -> None:
+        if list_items:
+            rendered = "".join(f"<li>{_inline_markdown(item)}</li>" for item in list_items)
+            html_lines.append(f"<ul>{rendered}</ul>")
+            list_items.clear()
+        if ordered_items:
+            rendered = "".join(f"<li>{_inline_markdown(item)}</li>" for item in ordered_items)
+            html_lines.append(f"<ol>{rendered}</ol>")
+            ordered_items.clear()
+
+    def flush_code() -> None:
+        if not code_lines:
+            return
+        code = "\n".join(code_lines)
+        html_lines.append(f"<pre><code>{_escape(code)}</code></pre>")
+        code_lines.clear()
+
+    for raw_line in lines:
+        line = raw_line.rstrip()
+        stripped = line.strip()
+        if in_code:
+            if stripped.startswith("```"):
+                flush_code()
+                in_code = False
+            else:
+                code_lines.append(raw_line)
+            continue
+        if stripped.startswith("```"):
+            flush_paragraph()
+            flush_lists()
+            in_code = True
+            continue
+        if not stripped:
+            flush_paragraph()
+            flush_lists()
+            continue
+
+        heading = re.match(r"^(#{1,6})\s+(.+)$", stripped)
+        if heading:
+            flush_paragraph()
+            flush_lists()
+            level = min(len(heading.group(1)), 4)
+            html_lines.append(f"<h{level}>{_inline_markdown(heading.group(2).strip())}</h{level}>")
+            continue
+
+        unordered = re.match(r"^[-*]\s+(.+)$", stripped)
+        if unordered:
+            flush_paragraph()
+            if ordered_items:
+                flush_lists()
+            list_items.append(unordered.group(1).strip())
+            continue
+
+        ordered = re.match(r"^\d+[.)]\s+(.+)$", stripped)
+        if ordered:
+            flush_paragraph()
+            if list_items:
+                flush_lists()
+            ordered_items.append(ordered.group(1).strip())
+            continue
+
+        if stripped.startswith(">"):
+            flush_paragraph()
+            flush_lists()
+            quote = stripped.lstrip("> ").strip()
+            html_lines.append(f"<blockquote><p>{_inline_markdown(quote)}</p></blockquote>")
+            continue
+
+        paragraph.append(stripped)
+
+    flush_paragraph()
+    flush_lists()
+    if in_code:
+        flush_code()
+    return "\n".join(html_lines)
+
+
+def _inline_markdown(text: str) -> str:
+    rendered = _escape(text)
+    rendered = re.sub(r"`([^`]+)`", r"<code>\1</code>", rendered)
+    rendered = re.sub(r"\*\*([^*]+)\*\*", r"<strong>\1</strong>", rendered)
+    rendered = re.sub(r"\*([^*]+)\*", r"<em>\1</em>", rendered)
+    return rendered
 
 
 def _first_heading(text: str) -> str:
@@ -616,10 +825,15 @@ def _review_value(decision: object, field: str) -> str:
     return str(getattr(decision, field, "")).strip()
 
 
-def _message(message: str) -> str:
-    if not message:
+def _message(message: str, message_zh: str = "") -> str:
+    if not message and not message_zh:
         return ""
-    return f'<div class="message">{_escape(message)}</div>'
+    return (
+        '<div class="message" data-i18n '
+        f'data-en="{_escape(message or message_zh)}" '
+        f'data-zh="{_escape(message_zh or message)}">'
+        f"{_escape(message_zh or message)}</div>"
+    )
 
 
 def _escape(value: object) -> str:

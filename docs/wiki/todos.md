@@ -19,8 +19,9 @@ sessions.
 - Continue item-level review ergonomics. CLI-backed
   approve/reject/defer/downgrade/merge/edit and the clickable SSH-friendly
   `review-ui` are implemented. The UI now supports filtering, hiding reviewed
-  cards, batch decisions, and in-window Markdown edits. Next steps are conflict
-  previews, richer diffs, and stricter all-items-reviewed gates.
+  cards, batch decisions, language switching, rendered Markdown previews, and
+  in-window Markdown edits. Next steps are conflict previews, richer diffs, and
+  stricter all-items-reviewed gates.
 
 ## Medium Priority
 
@@ -29,8 +30,8 @@ sessions.
 - Add optional reranking for `search`, `ask`, and `context`.
 - Add `wiki_search` and `wiki_read` style machine-facing surfaces for agents.
 - Add `export --format llms-full` for compact project context export.
-- Improve bilingual wiki behavior beyond seed pages: bilingual section aliases,
-  language-aware prompts, and optional answer language control.
+- Improve multilingual behavior beyond the review UI: bilingual section
+  aliases, language-aware prompts, and optional answer language control.
 - Add skilllet versioning, deprecation, supersession, conflict detection, and a
   changelog for merged memory units.
 - Add CI, package/release workflow, privacy/security docs, and `vibewiki doctor`.
