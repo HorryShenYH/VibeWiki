@@ -89,28 +89,28 @@ Needed improvements:
 ### Review Experience
 
 `review-board` supports a CLI-backed item-decision loop, and `review-ui` now
-provides a first interactive review queue for SSH/browser workflows. Each
-candidate can be reviewed at item level:
+provides a simplified interactive review queue for SSH/browser workflows. The
+CLI keeps advanced item decisions, but the browser UI intentionally focuses on
+the decisions a human actually wants to make while reviewing:
 
-- approve or reject a finding
-- downgrade a candidate skilllet to knowledge
-- merge a candidate skilllet into an existing skilllet
-- mark a candidate as deferred
-- edit title, tags, and summary before merge
+- submit a candidate
+- discard a candidate
+- edit candidate Markdown directly
+- give natural-language revision instructions and let the configured LLM create
+  a revised candidate
 
 Implemented UI improvements:
 
 - hide reviewed cards by default so approving an item shrinks the visible queue
 - auto-dismiss success messages
-- search and kind filters for large patches
-- batch approve/reject/defer for selected items
 - in-window Markdown editing for candidate files under `.vibewiki/patches/`
+- LLM-assisted candidate revision from reviewer instructions
 - Chinese/English UI label switching without showing both languages at once
 - rendered Markdown previews for candidate cards
 
 Remaining improvements: show merge previews/conflicts, add richer candidate
-diffs, support safer edit history, and optionally require all items to be
-explicitly reviewed before merge.
+diffs, keep edit history for LLM revisions, and optionally require all items to
+be explicitly reviewed before merge.
 
 ### Bilingual Wiki Mode
 

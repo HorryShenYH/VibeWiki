@@ -57,6 +57,29 @@ Verification:
 
 - `python3 -m unittest discover -s tests` passed with 20 tests.
 
+## 2026-06-20 Simplified Review UI
+
+Dogfooding the review UI showed that exposing every item-level decision field in
+the browser made the product feel harder than reviewing Markdown by hand. The
+browser surface should not mirror the CLI.
+
+The review UI is now intentionally smaller:
+
+- submit a candidate
+- discard a candidate
+- edit the candidate Markdown directly
+- write a short revision instruction and let the configured LLM generate a new
+  candidate draft
+
+Advanced decisions such as downgrade, merge into an existing slug, edited title,
+tags, and summary remain available through `vibewiki review-item`, but they are
+not the default browser experience. This keeps human review focused on judgment,
+while letting the LLM handle mechanical rewriting.
+
+Verification:
+
+- `python3 -m unittest discover -s tests` passed with 22 tests.
+
 ## 2026-06-20 Review UI Language And Markdown Preview
 
 VibeWiki now separates storage language from review display language. Candidate

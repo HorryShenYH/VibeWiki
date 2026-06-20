@@ -20,7 +20,7 @@ from vibewiki.review import (
     update_item_body,
 )
 from vibewiki.review_board import generate_review_board
-from vibewiki.review_ui import _markdown_to_html, render_review_ui
+from vibewiki.review_ui import _markdown_to_html, render_review_ui, revise_candidate_markdown
 from vibewiki.retrieval import answer_question, build_context_pack, search_memory
 from vibewiki.validate import validate_skill_file, validate_skill_text
 
@@ -557,18 +557,24 @@ python3 compare_outputs.py
             self.assertIn('data-en="VibeWiki Review"', ui_html)
             self.assertIn('data-lang-choice="zh"', ui_html)
             self.assertIn('data-lang-choice="en"', ui_html)
-            self.assertIn(">批准<", ui_html)
-            self.assertIn('action="/decision"', ui_html)
-            self.assertIn('action="/bulk-decision"', ui_html)
-            self.assertIn('action="/save-item"', ui_html)
+            self.assertIn(">提交<", ui_html)
+            self.assertIn(">不提交<", ui_html)
+            self.assertIn('action="/item-action"', ui_html)
+            self.assertIn('name="action" value="approve"', ui_html)
+            self.assertIn('name="action" value="reject"', ui_html)
+            self.assertIn('name="action" value="revise"', ui_html)
             self.assertIn("隐藏已审", ui_html)
-            self.assertIn("保存 Markdown", ui_html)
+            self.assertIn("编辑 Markdown 或让 LLM 修改", ui_html)
+            self.assertIn("让 LLM 生成修订稿", ui_html)
             self.assertIn('class="preview"', ui_html)
             self.assertIn("<h1>", ui_html)
             self.assertIn('textarea name="body"', ui_html)
+            self.assertIn('textarea name="instruction"', ui_html)
             self.assertIn("setTimeout", ui_html)
             self.assertIn("matlab-gold-vemu-compare", ui_html)
             self.assertNotIn("Approve / 批准", ui_html)
+            self.assertNotIn("目标：knowledge", ui_html)
+            self.assertNotIn("批量备注", ui_html)
 
     def test_review_ui_markdown_preview_is_rendered_and_escaped(self) -> None:
         rendered = _markdown_to_html(
@@ -591,6 +597,24 @@ echo "# this stays code"
         self.assertIn("&lt;script&gt;alert(1)&lt;/script&gt;", rendered)
         self.assertIn("echo &quot;# this stays code&quot;", rendered)
         self.assertNotIn("<script>", rendered)
+
+    def test_review_ui_llm_revision_uses_configured_chat_api(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            init_project(root)
+            with patch.dict(os.environ, {"VIBEWIKI_LLM_API_KEY": "token"}, clear=True):
+                with patch(
+                    "vibewiki.review_ui.chat_completion",
+                    return_value="```markdown\n# Revised Candidate\n\nStatus: candidate\n```",
+                ) as mocked:
+                    revised = revise_candidate_markdown(
+                        root,
+                        body="# Candidate\n\nStatus: candidate\n",
+                        instruction="Make it shorter.",
+                    )
+
+            self.assertEqual(revised, "# Revised Candidate\n\nStatus: candidate\n")
+            self.assertTrue(mocked.called)
 
     def test_item_level_review_decisions_affect_merge(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

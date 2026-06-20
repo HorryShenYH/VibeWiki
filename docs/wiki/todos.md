@@ -23,9 +23,9 @@ sessions.
   larger reusable units without mutating approved memory directly.
 - Continue item-level review ergonomics. CLI-backed
   approve/reject/defer/downgrade/merge/edit and the clickable SSH-friendly
-  `review-ui` are implemented. The UI now supports filtering, hiding reviewed
-  cards, batch decisions, language switching, rendered Markdown previews, and
-  in-window Markdown edits. Next steps are conflict previews, richer diffs, and
+  `review-ui` are implemented. The UI is now simplified around submit, discard,
+  direct Markdown edits, and LLM revision from reviewer instructions. Next steps
+  are conflict previews, edit history for LLM revisions, richer diffs, and
   stricter all-items-reviewed gates.
 
 ## Medium Priority

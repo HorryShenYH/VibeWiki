@@ -8,6 +8,7 @@ import socketserver
 from urllib.parse import parse_qs, urlencode
 
 from .distill import parse_sections
+from .llm import chat_completion, llm_settings
 from .merge import merge_patches
 from .project import ensure_workspace
 from .review import (
@@ -18,6 +19,7 @@ from .review import (
     review_patches,
     update_item_body,
 )
+from .retrieval import load_retrieval_config
 from .text_utils import read_text_if_exists
 
 
@@ -34,8 +36,6 @@ def render_review_ui(
     session_id = selected_patch_dir.name
     decisions = read_item_decisions(root, session_id)
     items = _review_items(selected_patch_dir, decisions)
-    kinds = sorted({str(item["kind"]) for item in items})
-    kind_options = "".join(f'<option value="{_escape(kind)}">{_escape(kind)}</option>' for kind in kinds)
     session_md = read_text_if_exists(root / ".vibewiki" / "sessions" / session_id / "session.md")
     sections = parse_sections(session_md) if session_md else {}
     goal = sections.get("Goal", "Not provided.").strip()
@@ -159,6 +159,39 @@ def render_review_ui(
       flex-wrap: wrap;
       gap: 8px;
       align-items: center;
+    }}
+    .queue-tools {{
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 12px;
+    }}
+    .simple-actions {{
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 12px;
+    }}
+    .review-lab {{
+      border-top: 1px solid var(--line);
+      margin-top: 12px;
+      padding-top: 12px;
+    }}
+    .review-lab summary {{
+      cursor: pointer;
+      color: var(--teal);
+      font-size: 13px;
+      margin-bottom: 8px;
+    }}
+    .review-lab textarea[name="body"] {{
+      min-height: 300px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 12px;
+      line-height: 1.45;
+    }}
+    .review-lab textarea[name="instruction"] {{
+      min-height: 82px;
     }}
     label.inline {{
       display: inline-flex;
@@ -285,6 +318,7 @@ def render_review_ui(
     button.reject {{ color: var(--rose); }}
     button.defer {{ color: var(--amber); }}
     button.merge {{ color: var(--blue); }}
+    button.save {{ color: var(--blue); }}
     .patch-actions {{ display: flex; gap: 8px; flex-wrap: wrap; }}
     @media (max-width: 900px) {{
       main {{ padding: 16px; }}
@@ -314,7 +348,7 @@ def render_review_ui(
             <button class="primary" type="submit">{_i18n("Approve Patch", "批准整包")}</button>
           </form>
           <form method="post" action="/merge">
-            <button class="merge" type="submit">{_i18n("Merge", "合并")}</button>
+            <button class="merge" type="submit">{_i18n("Merge Submitted", "合并已提交")}</button>
           </form>
         </div>
       </div>
@@ -334,35 +368,19 @@ def render_review_ui(
         <section class="panel">
           <h2>{_i18n("Review Notes", "审核说明")}</h2>
           <div class="text">
-            <p>{_i18n("Candidate Markdown is stored as English project memory. The review page only changes display language.", "候选 Markdown 统一作为英文项目记忆保存；审核页面只切换展示语言。")}</p>
-            <p>{_i18n("Reviewed cards are hidden by default. Open the editor when you need to revise the candidate source.", "已审核卡片默认隐藏。需要修改候选源文件时展开编辑器。")}</p>
+            <p>{_i18n("Review one candidate at a time: submit it, discard it, edit Markdown directly, or ask the LLM to revise it from your instructions.", "一次只审核一条候选：提交、不提交、直接改 Markdown，或者写修改意见让 LLM 修订。")}</p>
+            <p>{_i18n("The LLM only rewrites the candidate draft. You still decide whether to submit it.", "LLM 只生成修订稿，是否提交仍然由你判断。")}</p>
           </div>
         </section>
       </aside>
       <section>
-        <section class="panel toolbar" aria-label="Review tools">
-          <div class="toolbar-row">
-            <input id="filter-text" type="search" placeholder="搜索候选" data-placeholder-en="Search candidates" data-placeholder-zh="搜索候选">
-            <select id="filter-kind" aria-label="Kind filter">
-              <option value="" data-i18n data-en="All kinds" data-zh="全部类型">全部类型</option>
-              {kind_options}
-            </select>
-            <label class="inline">
-              <input id="hide-reviewed" type="checkbox" checked>
-              {_i18n("Hide reviewed", "隐藏已审")}
-            </label>
-            <span id="visible-count" class="count">{_escape(str(len(items)))} / {_escape(str(len(items)))}</span>
-          </div>
-          <form id="bulk-form" class="bulk-row" method="post" action="/bulk-decision">
-            <select name="decision" aria-label="Bulk decision">
-              <option value="approve" data-i18n data-en="Approve selected" data-zh="批准所选">批准所选</option>
-              <option value="reject" data-i18n data-en="Reject selected" data-zh="拒绝所选">拒绝所选</option>
-              <option value="defer" data-i18n data-en="Defer selected" data-zh="稍后处理">稍后处理</option>
-            </select>
-            <input name="note" placeholder="批量备注" data-placeholder-en="Bulk note" data-placeholder-zh="批量备注">
-            <button class="primary" type="submit">{_i18n("Apply", "应用")}</button>
-          </form>
-        </section>
+        <div class="queue-tools">
+          <label class="inline">
+            <input id="hide-reviewed" type="checkbox" checked>
+            {_i18n("Hide reviewed", "隐藏已审")}
+          </label>
+          <span id="visible-count" class="count">{_escape(str(len(items)))} / {_escape(str(len(items)))}</span>
+        </div>
         <section class="stack">
         {''.join(_item_card(item) for item in items)}
         </section>
@@ -400,42 +418,22 @@ def render_review_ui(
       }}, 3200);
 
       const cards = Array.from(document.querySelectorAll("[data-review-card]"));
-      const textFilter = document.getElementById("filter-text");
-      const kindFilter = document.getElementById("filter-kind");
       const hideReviewed = document.getElementById("hide-reviewed");
       const visibleCount = document.getElementById("visible-count");
 
       function applyFilters() {{
-        const query = (textFilter.value || "").trim().toLowerCase();
-        const kind = kindFilter.value;
         const shouldHideReviewed = hideReviewed.checked;
         let visible = 0;
         cards.forEach((card) => {{
-          const matchesText = !query || (card.dataset.search || "").includes(query);
-          const matchesKind = !kind || card.dataset.kind === kind;
           const reviewed = card.dataset.decision && card.dataset.decision !== "unreviewed";
-          const matchesReviewState = !shouldHideReviewed || !reviewed;
-          const show = matchesText && matchesKind && matchesReviewState;
+          const show = !shouldHideReviewed || !reviewed;
           card.hidden = !show;
           if (show) visible += 1;
         }});
         visibleCount.textContent = `${{visible}} / ${{cards.length}}`;
       }}
 
-      [textFilter, kindFilter, hideReviewed].forEach((control) => {{
-        control.addEventListener("input", applyFilters);
-        control.addEventListener("change", applyFilters);
-      }});
-
-      const bulkForm = document.getElementById("bulk-form");
-      bulkForm.addEventListener("submit", (event) => {{
-        const checked = document.querySelectorAll('input[name="item"][form="bulk-form"]:checked');
-        if (!checked.length) {{
-          event.preventDefault();
-          const lang = document.body.dataset.lang || defaultLang;
-          window.alert(lang === "en" ? "Select at least one item" : "请至少选择一项");
-        }}
-      }});
+      hideReviewed.addEventListener("change", applyFilters);
 
       languageButtons.forEach((button) => {{
         button.addEventListener("click", () => setLanguage(button.dataset.langChoice || defaultLang));
@@ -483,6 +481,44 @@ def serve_review_ui(
             length = int(self.headers.get("Content-Length", "0") or 0)
             data = parse_qs(self.rfile.read(length).decode("utf-8"))
             try:
+                if self.path == "/item-action":
+                    item = _form_value(data, "item")
+                    action = _form_value(data, "action")
+                    body = _form_text(data, "body")
+                    instruction = _form_value(data, "instruction")
+                    if action == "save":
+                        update_item_body(root, patch_dir=selected_patch_dir, item=item, body=body)
+                        self._redirect(f"Saved Markdown for {item}", f"已保存 {item} 的 Markdown")
+                        return
+                    if action == "approve":
+                        update_item_body(root, patch_dir=selected_patch_dir, item=item, body=body)
+                        record_item_decision(
+                            root,
+                            patch_dir=selected_patch_dir,
+                            item=item,
+                            decision="approve",
+                            note="Submitted from simplified review UI.",
+                        )
+                        self._redirect(f"Submitted {item}", f"已提交 {item}")
+                        return
+                    if action == "reject":
+                        record_item_decision(
+                            root,
+                            patch_dir=selected_patch_dir,
+                            item=item,
+                            decision="reject",
+                            note=instruction or "Rejected from simplified review UI.",
+                        )
+                        self._redirect(f"Discarded {item}", f"已标记不提交 {item}")
+                        return
+                    if action == "revise":
+                        if not instruction:
+                            raise ValueError("Revision instruction is required.")
+                        revised = revise_candidate_markdown(root, body=body, instruction=instruction)
+                        update_item_body(root, patch_dir=selected_patch_dir, item=item, body=revised)
+                        self._redirect(f"Revised {item} with LLM", f"LLM 已修订 {item}")
+                        return
+                    raise ValueError(f"Unknown item action: {action}")
                 if self.path == "/decision":
                     item = _form_value(data, "item")
                     decision = _form_value(data, "decision")
@@ -610,11 +646,6 @@ def _item_card(item: dict[str, object]) -> str:
     item_snippet = str(item["snippet"])
     item_body = str(item["body"])
     preview_html = _markdown_to_html(item_body)
-    title = _review_value(decision, "title")
-    target = _review_value(decision, "target")
-    tags = _review_value(decision, "tags")
-    summary = _review_value(decision, "summary")
-    note = _review_value(decision, "note")
     search_text = " ".join(
         str(value)
         for value in [
@@ -636,41 +667,63 @@ def _item_card(item: dict[str, object]) -> str:
         <span class="badge {decision_class}">{_escape(decision_text)}</span>
       </div>
     </div>
-    <label class="select-item">
-      <input type="checkbox" name="item" value="{_escape(item_id)}" form="bulk-form">
-      {_i18n("Select", "选择")}
-    </label>
   </div>
   <div class="preview">{preview_html}</div>
-  <form class="controls" method="post" action="/decision">
+  <form class="controls" method="post" action="/item-action">
     <input type="hidden" name="item" value="{_escape(item_id)}">
-    <div class="fields">
-      <input name="title" value="{_escape(title)}" placeholder="标题" data-placeholder-en="Title" data-placeholder-zh="标题">
-      <input name="target" value="{_escape(target)}" placeholder="目标：knowledge 或 existing-slug" data-placeholder-en="Target: knowledge or existing-slug" data-placeholder-zh="目标：knowledge 或 existing-slug">
-      <input name="tags" value="{_escape(tags)}" placeholder="标签" data-placeholder-en="Tags" data-placeholder-zh="标签">
-      <textarea name="summary" placeholder="摘要" data-placeholder-en="Summary" data-placeholder-zh="摘要">{_escape(summary)}</textarea>
+    <div class="simple-actions">
+      <button class="primary" type="submit" name="action" value="approve">{_i18n("Submit", "提交")}</button>
+      <button class="reject" type="submit" name="action" value="reject">{_i18n("Do Not Submit", "不提交")}</button>
     </div>
-    <textarea name="note" placeholder="备注" data-placeholder-en="Note" data-placeholder-zh="备注">{_escape(note)}</textarea>
-    <div class="buttons">
-      <button class="primary" type="submit" name="decision" value="approve">{_i18n("Approve", "批准")}</button>
-      <button class="reject" type="submit" name="decision" value="reject">{_i18n("Reject", "拒绝")}</button>
-      <button class="defer" type="submit" name="decision" value="defer">{_i18n("Defer", "稍后")}</button>
-      <button type="submit" name="decision" value="downgrade">{_i18n("Downgrade", "降为知识")}</button>
-      <button class="merge" type="submit" name="decision" value="merge">{_i18n("Merge into existing", "合入已有")}</button>
-      <button type="submit" name="decision" value="edit">{_i18n("Approve with edits", "编辑后批准")}</button>
-    </div>
-  </form>
-  <details class="editor">
-    <summary>{_i18n("Edit Markdown Source", "编辑 Markdown 源码")}</summary>
-    <form class="controls" method="post" action="/save-item">
-      <input type="hidden" name="item" value="{_escape(item_id)}">
+    <details class="review-lab">
+      <summary>{_i18n("Edit Markdown or Ask LLM to Revise", "编辑 Markdown 或让 LLM 修改")}</summary>
       <textarea name="body" spellcheck="false">{_escape(item_body)}</textarea>
-      <div class="buttons">
-        <button class="primary" type="submit">{_i18n("Save Markdown", "保存 Markdown")}</button>
+      <textarea name="instruction" placeholder="写一句修改意见，例如：压缩成一条 issue，删掉重复内容，保留证据" data-placeholder-en="Revision instruction, e.g. shorten this into one issue, remove duplicated claims, keep evidence" data-placeholder-zh="写一句修改意见，例如：压缩成一条 issue，删掉重复内容，保留证据"></textarea>
+      <div class="simple-actions">
+        <button class="save" type="submit" name="action" value="save">{_i18n("Save Manual Edit", "保存手动修改")}</button>
+        <button class="merge" type="submit" name="action" value="revise">{_i18n("Generate Revision with LLM", "让 LLM 生成修订稿")}</button>
       </div>
-    </form>
-  </details>
+    </details>
+  </form>
 </article>"""
+
+
+def revise_candidate_markdown(project: Path, *, body: str, instruction: str) -> str:
+    root = project.resolve()
+    config = load_retrieval_config(root)
+    settings = llm_settings(
+        base_url_env=config.llm_base_url_env,
+        api_key_env=config.llm_api_key_env,
+        model_env=config.llm_model_env,
+    )
+    if not settings:
+        raise RuntimeError(
+            "No LLM API is configured. Set VIBEWIKI_LLM_BASE_URL, "
+            "VIBEWIKI_LLM_API_KEY, and VIBEWIKI_LLM_MODEL."
+        )
+    system = (
+        "You revise VibeWiki candidate memory Markdown for human review. "
+        "Return only the full revised Markdown document. Keep the document in English. "
+        "Preserve factual evidence, status/kind/type/session metadata, and source claims. "
+        "Do not invent facts. If the reviewer asks for deletion or rejection, produce a "
+        "short candidate note explaining why it should not be submitted."
+    )
+    user = f"""Reviewer instruction:
+{instruction}
+
+Current candidate Markdown:
+{body}
+"""
+    revised = chat_completion(settings, system=system, user=user)
+    return _strip_markdown_fence(revised).strip() + "\n"
+
+
+def _strip_markdown_fence(text: str) -> str:
+    stripped = text.strip()
+    match = re.match(r"^```(?:markdown|md)?\s*\n(.*)\n```$", stripped, re.DOTALL)
+    if match:
+        return match.group(1)
+    return stripped
 
 
 def _i18n(en: str, zh: str) -> str:
