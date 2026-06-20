@@ -80,6 +80,33 @@ Verification:
 
 - `python3 -m unittest discover -s tests` passed with 22 tests.
 
+## 2026-06-20 Review Plan Triage
+
+Dogfooding a VibeWiki self-review conversation produced 29 raw candidates,
+which was too much human review work for a single session. The product rule is
+now explicit: a raw observation is audit evidence, not necessarily something a
+human should review immediately.
+
+VibeWiki now creates `review_plan.json` beside each patch. The plan is
+machine-readable and currently rule-based:
+
+- all raw candidates are preserved
+- a small `review_now` batch is shown by default
+- lower-priority candidates are hidden until requested
+- broad or duplicate-looking candidates can be marked `suggested_discard`
+- the review UI shows the plan reason on each card
+
+The self-review patch now triages 29 raw items into 8 default review items, 18
+lower-priority items, and 3 suggested-discard items. Future work should let a
+configured LLM cluster related candidates, propose merges, and revise the plan
+without automatically promoting memory.
+
+Verification:
+
+- `python3 -m unittest discover -s tests` passed with 23 tests.
+- `python3 -m vibewiki.cli --project /home/shenyihao/MyProject/VibeWiki review-plan --help`
+  passed.
+
 ## 2026-06-20 Review UI Language And Markdown Preview
 
 VibeWiki now separates storage language from review display language. Candidate

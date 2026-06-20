@@ -12,6 +12,7 @@ from .merge import merge_patches
 from .project import init_project
 from .review import patch_summary, record_item_decision, review_patches
 from .review_board import generate_review_board
+from .review_plan import build_review_plan, format_review_plan_summary
 from .review_ui import serve_review_ui
 from .retrieval import answer_question, build_context_pack, format_search_results, search_memory
 from .validate import default_skill_path, validate_skill_file
@@ -168,6 +169,19 @@ def build_parser() -> argparse.ArgumentParser:
     )
     review_board.add_argument("--patch-dir", default=None, help="Specific patch directory to render.")
     review_board.add_argument("--output", default=None, help="HTML file to write.")
+
+    review_plan = subparsers.add_parser(
+        "review-plan",
+        help="Generate a compact pre-review triage plan for candidate items.",
+    )
+    review_plan.add_argument("--patch-dir", default=None, help="Specific patch directory to triage.")
+    review_plan.add_argument("--force", action="store_true", help="Rebuild even if the plan is current.")
+    review_plan.add_argument(
+        "--review-limit",
+        type=int,
+        default=8,
+        help="Maximum unreviewed items shown by default. Defaults to 8.",
+    )
 
     review_ui = subparsers.add_parser(
         "review-ui",
@@ -372,6 +386,17 @@ def run(args: argparse.Namespace) -> int:
         output = _path(args.output) if args.output else None
         board = generate_review_board(project, patch_dir=patch_dir, output=output)
         print(f"Generated review board: {board}")
+        return 0
+
+    if args.subcommand == "review-plan":
+        patch_dir = _path(args.patch_dir) if args.patch_dir else None
+        plan = build_review_plan(
+            project,
+            patch_dir=patch_dir,
+            force=args.force,
+            review_limit=args.review_limit,
+        )
+        print(format_review_plan_summary(plan))
         return 0
 
     if args.subcommand == "review-ui":

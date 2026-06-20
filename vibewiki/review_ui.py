@@ -19,6 +19,7 @@ from .review import (
     review_patches,
     update_item_body,
 )
+from .review_plan import ReviewPlanEntry, build_review_plan
 from .retrieval import load_retrieval_config
 from .text_utils import read_text_if_exists
 
@@ -35,13 +36,23 @@ def render_review_ui(
     selected_patch_dir = (patch_dir or latest_patch_dir(root)).resolve()
     session_id = selected_patch_dir.name
     decisions = read_item_decisions(root, session_id)
-    items = _review_items(selected_patch_dir, decisions)
+    review_plan = build_review_plan(root, patch_dir=selected_patch_dir)
+    plan_summary = review_plan.payload.get("summary", {})
+    if not isinstance(plan_summary, dict):
+        plan_summary = {}
+    items = _review_items(selected_patch_dir, decisions, review_plan.items)
     session_md = read_text_if_exists(root / ".vibewiki" / "sessions" / session_id / "session.md")
     sections = parse_sections(session_md) if session_md else {}
     goal = sections.get("Goal", "Not provided.").strip()
     outcome = sections.get("Final Outcome", "Not provided.").strip()
     approved = "decision: approved" in read_text_if_exists(
         root / ".vibewiki" / "reviews" / f"{session_id}.yaml"
+    )
+    default_visible = sum(
+        1
+        for item in items
+        if _plan_group(item) == "review_now"
+        and not isinstance(item.get("decision"), ItemDecision)
     )
 
     return f"""<!doctype html>
@@ -130,6 +141,9 @@ def render_review_ui(
     .badge.kind {{ color: var(--teal); border-color: #99c8c2; }}
     .badge.decision {{ color: var(--blue); border-color: #a7bdf5; }}
     .badge.skip {{ color: var(--rose); border-color: #e7a7b7; }}
+    .badge.plan-review {{ color: var(--teal); border-color: #99c8c2; }}
+    .badge.plan-later {{ color: var(--amber); border-color: #dfc27a; }}
+    .badge.plan-discard {{ color: var(--rose); border-color: #e7a7b7; }}
     .message {{
       margin-bottom: 16px;
       padding: 12px 14px;
@@ -166,6 +180,42 @@ def render_review_ui(
       align-items: center;
       justify-content: space-between;
       margin-bottom: 12px;
+      flex-wrap: wrap;
+    }}
+    .filter-tools {{
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      flex-wrap: wrap;
+    }}
+    .triage-grid {{
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+      margin-top: 10px;
+    }}
+    .triage-cell {{
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 8px;
+      background: #fff;
+    }}
+    .triage-num {{
+      display: block;
+      font-size: 18px;
+      font-weight: 700;
+      line-height: 1.1;
+    }}
+    .triage-label {{
+      display: block;
+      color: var(--muted);
+      font-size: 12px;
+      margin-top: 2px;
+    }}
+    .plan-reason {{
+      color: var(--muted);
+      font-size: 12px;
+      margin: 8px 0 0;
     }}
     .simple-actions {{
       display: flex;
@@ -366,6 +416,18 @@ def render_review_ui(
           </div>
         </section>
         <section class="panel">
+          <h2>{_i18n("Pre-Review Triage", "预审整理")}</h2>
+          <div class="text">
+            <p>{_i18n("VibeWiki keeps every raw candidate, but only shows the strongest review batch by default.", "VibeWiki 会保留所有原始候选，但默认只显示最值得人工判断的一批。")}</p>
+            <div class="triage-grid">
+              {_triage_cell("Raw", "原始候选", plan_summary.get("raw_items", 0))}
+              {_triage_cell("Review now", "优先审核", plan_summary.get("review_now", 0))}
+              {_triage_cell("Lower priority", "低优先级", plan_summary.get("suggested_later", 0))}
+              {_triage_cell("Suggested discard", "建议不提交", plan_summary.get("suggested_discard", 0))}
+            </div>
+          </div>
+        </section>
+        <section class="panel">
           <h2>{_i18n("Review Notes", "审核说明")}</h2>
           <div class="text">
             <p>{_i18n("Review one candidate at a time: submit it, discard it, edit Markdown directly, or ask the LLM to revise it from your instructions.", "一次只审核一条候选：提交、不提交、直接改 Markdown，或者写修改意见让 LLM 修订。")}</p>
@@ -375,11 +437,21 @@ def render_review_ui(
       </aside>
       <section>
         <div class="queue-tools">
-          <label class="inline">
-            <input id="hide-reviewed" type="checkbox" checked>
-            {_i18n("Hide reviewed", "隐藏已审")}
-          </label>
-          <span id="visible-count" class="count">{_escape(str(len(items)))} / {_escape(str(len(items)))}</span>
+          <div class="filter-tools">
+            <label class="inline">
+              <input id="hide-reviewed" type="checkbox" checked>
+              {_i18n("Hide reviewed", "隐藏已审")}
+            </label>
+            <label class="inline">
+              <input id="show-later" type="checkbox">
+              {_i18n("Show lower priority", "显示低优先级")}
+            </label>
+            <label class="inline">
+              <input id="show-discard" type="checkbox">
+              {_i18n("Show suggested discard", "显示建议不提交")}
+            </label>
+          </div>
+          <span id="visible-count" class="count">{_escape(str(default_visible))} / {_escape(str(len(items)))}</span>
         </div>
         <section class="stack">
         {''.join(_item_card(item) for item in items)}
@@ -419,14 +491,24 @@ def render_review_ui(
 
       const cards = Array.from(document.querySelectorAll("[data-review-card]"));
       const hideReviewed = document.getElementById("hide-reviewed");
+      const showLater = document.getElementById("show-later");
+      const showDiscard = document.getElementById("show-discard");
       const visibleCount = document.getElementById("visible-count");
 
       function applyFilters() {{
         const shouldHideReviewed = hideReviewed.checked;
+        const shouldShowLater = showLater.checked;
+        const shouldShowDiscard = showDiscard.checked;
         let visible = 0;
         cards.forEach((card) => {{
           const reviewed = card.dataset.decision && card.dataset.decision !== "unreviewed";
-          const show = !shouldHideReviewed || !reviewed;
+          const group = card.dataset.planGroup || "review_now";
+          const groupVisible =
+            group === "review_now" ||
+            (group === "suggested_later" && shouldShowLater) ||
+            (group === "suggested_discard" && shouldShowDiscard);
+          const reviewVisible = !shouldHideReviewed || !reviewed;
+          const show = groupVisible && reviewVisible;
           card.hidden = !show;
           if (show) visible += 1;
         }});
@@ -434,6 +516,8 @@ def render_review_ui(
       }}
 
       hideReviewed.addEventListener("change", applyFilters);
+      showLater.addEventListener("change", applyFilters);
+      showDiscard.addEventListener("change", applyFilters);
 
       languageButtons.forEach((button) => {{
         button.addEventListener("click", () => setLanguage(button.dataset.langChoice || defaultLang));
@@ -604,7 +688,12 @@ def serve_review_ui(
         server.serve_forever()
 
 
-def _review_items(patch_dir: Path, decisions: dict[str, ItemDecision]) -> list[dict[str, object]]:
+def _review_items(
+    patch_dir: Path,
+    decisions: dict[str, ItemDecision],
+    review_plan: dict[str, ReviewPlanEntry] | None = None,
+) -> list[dict[str, object]]:
+    plan_items = review_plan or {}
     items: list[dict[str, object]] = []
     for folder, fallback_kind in [
         ("findings", "finding"),
@@ -628,6 +717,7 @@ def _review_items(patch_dir: Path, decisions: dict[str, ItemDecision]) -> list[d
                     "kind": _field(text, "Kind") or _field(text, "Type") or fallback_kind,
                     "status": _field(text, "Status") or "candidate",
                     "decision": decisions.get(item_id),
+                    "plan": plan_items.get(item_id),
                     "snippet": _snippet(text),
                     "body": text,
                 }
@@ -635,10 +725,44 @@ def _review_items(patch_dir: Path, decisions: dict[str, ItemDecision]) -> list[d
     return items
 
 
+def _triage_cell(en: str, zh: str, value: object) -> str:
+    return (
+        '<div class="triage-cell">'
+        f'<span class="triage-num">{_escape(value)}</span>'
+        f'<span class="triage-label">{_i18n(en, zh)}</span>'
+        "</div>"
+    )
+
+
+def _plan_group(item: dict[str, object]) -> str:
+    plan = item.get("plan")
+    if isinstance(plan, ReviewPlanEntry):
+        return plan.group or "suggested_later"
+    return "review_now"
+
+
+def _plan_group_label(group: str) -> str:
+    labels = {
+        "review_now": ("Review now", "优先审核"),
+        "suggested_later": ("Lower priority", "低优先级"),
+        "suggested_discard": ("Suggested discard", "建议不提交"),
+    }
+    en, zh = labels.get(group, ("Pre-review", "预审"))
+    return _i18n(en, zh)
+
+
 def _item_card(item: dict[str, object]) -> str:
     decision = item.get("decision")
     decision_text = decision.decision if isinstance(decision, ItemDecision) else "unreviewed"
     decision_class = "skip" if decision_text in {"reject", "defer"} else "decision"
+    plan = item.get("plan")
+    plan_group = _plan_group(item)
+    plan_reason = plan.reason if isinstance(plan, ReviewPlanEntry) else "No pre-review note."
+    plan_badge_class = {
+        "review_now": "plan-review",
+        "suggested_later": "plan-later",
+        "suggested_discard": "plan-discard",
+    }.get(plan_group, "plan-later")
     item_id = str(item["id"])
     item_title = str(item["title"])
     item_kind = str(item["kind"])
@@ -657,7 +781,7 @@ def _item_card(item: dict[str, object]) -> str:
         ]
     )
     search_text = " ".join(search_text.split()).lower()
-    return f"""<article class="card" data-review-card data-kind="{_escape(item_kind)}" data-decision="{_escape(decision_text)}" data-search="{_escape(search_text)}">
+    return f"""<article class="card" data-review-card data-kind="{_escape(item_kind)}" data-decision="{_escape(decision_text)}" data-plan-group="{_escape(plan_group)}" data-search="{_escape(search_text)}">
   <div class="card-head">
     <div>
       <h3>{_escape(item_title)}</h3>
@@ -665,7 +789,9 @@ def _item_card(item: dict[str, object]) -> str:
         <span class="badge kind">{_escape(item_kind)}</span>
         <span class="badge">{_escape(item_status)}</span>
         <span class="badge {decision_class}">{_escape(decision_text)}</span>
+        <span class="badge {plan_badge_class}">{_plan_group_label(plan_group)}</span>
       </div>
+      <p class="plan-reason"><strong>{_i18n("Pre-review", "预审")}:</strong> {_escape(plan_reason)}</p>
     </div>
   </div>
   <div class="preview">{preview_html}</div>

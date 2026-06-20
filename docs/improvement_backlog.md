@@ -107,10 +107,14 @@ Implemented UI improvements:
 - LLM-assisted candidate revision from reviewer instructions
 - Chinese/English UI label switching without showing both languages at once
 - rendered Markdown previews for candidate cards
+- pre-review triage in `review_plan.json`, which keeps all raw candidates but
+  defaults the UI to a smaller batch of higher-value review items
+- terminal inspection with `vibewiki review-plan`
 
 Remaining improvements: show merge previews/conflicts, add richer candidate
-diffs, keep edit history for LLM revisions, and optionally require all items to
-be explicitly reviewed before merge.
+diffs, keep edit history for LLM revisions, add LLM-assisted clustering and
+merge suggestions for the review plan, and optionally require all visible items
+to be explicitly reviewed before merge.
 
 ### Bilingual Wiki Mode
 

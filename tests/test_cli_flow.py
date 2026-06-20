@@ -20,6 +20,7 @@ from vibewiki.review import (
     update_item_body,
 )
 from vibewiki.review_board import generate_review_board
+from vibewiki.review_plan import build_review_plan
 from vibewiki.review_ui import _markdown_to_html, render_review_ui, revise_candidate_markdown
 from vibewiki.retrieval import answer_question, build_context_pack, search_memory
 from vibewiki.validate import validate_skill_file, validate_skill_text
@@ -559,6 +560,10 @@ python3 compare_outputs.py
             self.assertIn('data-lang-choice="en"', ui_html)
             self.assertIn(">提交<", ui_html)
             self.assertIn(">不提交<", ui_html)
+            self.assertIn("预审整理", ui_html)
+            self.assertIn("显示低优先级", ui_html)
+            self.assertIn("显示建议不提交", ui_html)
+            self.assertIn('data-plan-group="review_now"', ui_html)
             self.assertIn('action="/item-action"', ui_html)
             self.assertIn('name="action" value="approve"', ui_html)
             self.assertIn('name="action" value="reject"', ui_html)
@@ -575,6 +580,67 @@ python3 compare_outputs.py
             self.assertNotIn("Approve / 批准", ui_html)
             self.assertNotIn("目标：knowledge", ui_html)
             self.assertNotIn("批量备注", ui_html)
+
+    def test_review_plan_triages_raw_candidates(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            init_project(root)
+            patch_dir = root / ".vibewiki" / "patches" / "triage-session"
+            findings = patch_dir / "findings"
+            skilllets = patch_dir / "skilllets"
+            findings.mkdir(parents=True)
+            skilllets.mkdir(parents=True)
+            (findings / "issue__outcome.md").write_text(
+                """# Issue: Outcome
+
+Status: candidate
+Type: issue
+Session: triage-session
+
+## Summary
+
+Candidate issue extracted from a product, research, or daily discussion: Outcome:
+VibeWiki is now a usable MVP but not yet a mature open-source product.
+
+## Follow Up
+
+Review whether this discussion section should be promoted, edited, merged, or discarded.
+""",
+                encoding="utf-8",
+            )
+            (findings / "todo__add-review-plan.md").write_text(
+                """# Todo: Add Review Plan
+
+Status: candidate
+Type: todo
+Session: triage-session
+
+## Summary
+
+Add pre-review triage so humans review fewer candidates by default.
+""",
+                encoding="utf-8",
+            )
+            (skilllets / "review-queue-triage.md").write_text(
+                """# Review Queue Triage
+
+Status: candidate
+Kind: skilllet
+
+## Summary
+
+Use a review plan before showing raw candidates to humans.
+""",
+                encoding="utf-8",
+            )
+
+            plan = build_review_plan(root, patch_dir=patch_dir, force=True)
+
+            self.assertTrue(plan.path.exists())
+            self.assertEqual(plan.payload["summary"]["raw_items"], 3)
+            self.assertEqual(plan.items["findings/issue__outcome.md"].group, "suggested_discard")
+            self.assertEqual(plan.items["findings/todo__add-review-plan.md"].group, "review_now")
+            self.assertEqual(plan.items["skilllets/review-queue-triage.md"].risk, "high")
 
     def test_review_ui_markdown_preview_is_rendered_and_escaped(self) -> None:
         rendered = _markdown_to_html(

@@ -22,6 +22,7 @@ The first version is intentionally local and conservative:
 - `vibewiki import-markdown` imports an exported Codex, Claude, or Cursor session.
 - `vibewiki import-url` imports a shared conversation URL, including ChatGPT share links.
 - `vibewiki distill` creates candidate memory patches.
+- `vibewiki review-plan` groups raw candidates into a smaller review queue.
 - `vibewiki review-board` renders a local HTML review board for candidate patches.
 - `vibewiki review-ui` serves a clickable local review UI for SSH/remote workflows.
 - `vibewiki validate-skill` checks Skill Patch quality gates.
@@ -189,13 +190,24 @@ your browser:
 vibewiki review-ui --patch-dir .vibewiki/patches/<session> --port 8765
 ```
 
-Open `http://127.0.0.1:8765/` after forwarding the port. The page keeps review
-deliberately small: preview a candidate, submit it, discard it, edit the
-candidate Markdown directly, or write a short revision instruction and let the
-configured LLM generate a revised candidate. The LLM only rewrites the draft;
-the human still decides whether to submit it. Candidate Markdown is previewed as
-rendered Markdown by default, and the review surface can switch between Chinese
-and English labels while keeping the underlying Markdown memory in English.
+Open `http://127.0.0.1:8765/` after forwarding the port. Before rendering, the
+UI writes a machine-readable `.vibewiki/patches/<session>/review_plan.json`.
+That plan keeps every raw candidate, but defaults the page to a smaller review
+batch and hides lower-priority or suggested-discard items behind switches.
+
+The page keeps review deliberately small: preview a candidate, submit it,
+discard it, edit the candidate Markdown directly, or write a short revision
+instruction and let the configured LLM generate a revised candidate. The LLM
+only rewrites the draft; the human still decides whether to submit it.
+Candidate Markdown is previewed as rendered Markdown by default, and the review
+surface can switch between Chinese and English labels while keeping the
+underlying Markdown memory in English.
+
+You can inspect or regenerate the triage plan from the terminal:
+
+```bash
+vibewiki review-plan --patch-dir .vibewiki/patches/<session>
+```
 
 For fine-grained review, use the per-item commands shown on each card:
 
