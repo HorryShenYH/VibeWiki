@@ -21,7 +21,12 @@ from vibewiki.review import (
 )
 from vibewiki.review_board import generate_review_board
 from vibewiki.review_plan import build_review_plan
-from vibewiki.review_ui import _markdown_to_html, render_review_ui, revise_candidate_markdown
+from vibewiki.review_ui import (
+    _markdown_to_html,
+    render_review_ui,
+    revise_candidate_markdown,
+    translate_candidate_markdown,
+)
 from vibewiki.retrieval import answer_question, build_context_pack, search_memory
 from vibewiki.validate import validate_skill_file, validate_skill_text
 
@@ -568,6 +573,8 @@ python3 compare_outputs.py
             self.assertIn('name="action" value="approve"', ui_html)
             self.assertIn('name="action" value="reject"', ui_html)
             self.assertIn('name="action" value="revise"', ui_html)
+            self.assertIn('name="action" value="translate"', ui_html)
+            self.assertIn("生成中文预览", ui_html)
             self.assertIn("隐藏已审", ui_html)
             self.assertIn("编辑 Markdown 或让 LLM 修改", ui_html)
             self.assertIn("让 LLM 生成修订稿", ui_html)
@@ -681,6 +688,31 @@ echo "# this stays code"
 
             self.assertEqual(revised, "# Revised Candidate\n\nStatus: candidate\n")
             self.assertTrue(mocked.called)
+
+    def test_review_ui_translation_uses_configured_chat_api_and_cache(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            init_project(root)
+            body = "# Candidate\n\nKeep `VEMU` and `TARGET_DAG` unchanged.\n"
+            with patch.dict(os.environ, {"VIBEWIKI_LLM_API_KEY": "token"}, clear=True):
+                with patch(
+                    "vibewiki.translation.chat_completion",
+                    return_value="# 候选\n\n保持 `VEMU` 和 `TARGET_DAG` 不变。",
+                ) as mocked:
+                    translated = translate_candidate_markdown(root, body=body)
+
+                with patch(
+                    "vibewiki.translation.chat_completion",
+                    side_effect=AssertionError("translation should come from cache"),
+                ):
+                    cached = translate_candidate_markdown(root, body=body)
+
+            self.assertEqual(translated, "# 候选\n\n保持 `VEMU` 和 `TARGET_DAG` 不变。\n")
+            self.assertEqual(cached, translated)
+            self.assertEqual(mocked.call_count, 1)
+            cache_dir = root / ".vibewiki" / "cache" / "translations"
+            self.assertTrue(any(cache_dir.glob("*.md")))
+            self.assertTrue(any(cache_dir.glob("*.json")))
 
     def test_item_level_review_decisions_affect_merge(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

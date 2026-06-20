@@ -80,6 +80,29 @@ Verification:
 
 - `python3 -m unittest discover -s tests` passed with 22 tests.
 
+## 2026-06-20 Display-Only Markdown Translation
+
+VibeWiki should be comfortable for Chinese-native reviewers without making the
+project memory multilingual and noisy. The storage rule stays simple: candidate
+and approved Markdown remain English by default. Translation belongs to the
+review display layer.
+
+The review UI now lets a reviewer generate a Chinese Markdown preview for each
+candidate. The translated preview is:
+
+- created with the configured OpenAI-compatible chat API
+- cached under `.vibewiki/cache/translations/`
+- rendered below the English preview
+- never written back to the candidate Markdown unless the human explicitly
+  edits the source Markdown
+
+This keeps machine-facing memory compact while making human review less tiring.
+
+Verification:
+
+- `python3 -m unittest tests.test_cli_flow.VibeWikiFlowTest.test_review_ui_translation_uses_configured_chat_api_and_cache`
+  passed.
+
 ## 2026-06-20 Review Plan Triage
 
 Dogfooding a VibeWiki self-review conversation produced 29 raw candidates,

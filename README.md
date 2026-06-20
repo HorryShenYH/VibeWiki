@@ -201,7 +201,10 @@ instruction and let the configured LLM generate a revised candidate. The LLM
 only rewrites the draft; the human still decides whether to submit it.
 Candidate Markdown is previewed as rendered Markdown by default, and the review
 surface can switch between Chinese and English labels while keeping the
-underlying Markdown memory in English.
+underlying Markdown memory in English. For Chinese-native reviewers, each card
+can also generate a cached Chinese Markdown preview with the configured LLM.
+That translation is display-only and stored under `.vibewiki/cache/`; it never
+rewrites the source candidate.
 
 You can inspect or regenerate the triage plan from the terminal:
 

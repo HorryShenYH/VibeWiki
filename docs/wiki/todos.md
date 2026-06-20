@@ -26,7 +26,8 @@ sessions.
   `review-ui` are implemented. The UI is now simplified around submit, discard,
   direct Markdown edits, LLM revision from reviewer instructions, and
   `review_plan.json` pre-review triage that reduces the default queue while
-  preserving raw candidates. Next steps are LLM-assisted clustering for the
+  preserving raw candidates. It also supports cached Chinese Markdown previews
+  as display-only translations. Next steps are LLM-assisted clustering for the
   review plan, conflict previews, edit history for LLM revisions, richer diffs,
   and stricter visible-items-reviewed gates.
 
@@ -38,7 +39,8 @@ sessions.
 - Add `wiki_search` and `wiki_read` style machine-facing surfaces for agents.
 - Add `export --format llms-full` for compact project context export.
 - Improve multilingual behavior beyond the review UI: bilingual section
-  aliases, language-aware prompts, and optional answer language control.
+  aliases, language-aware prompts, optional answer language control, and
+  translation cache management.
 - Add optional hook capture for session end, pre-compact, and important command
   results, but keep hooks opt-in and candidate-only.
 - Add `vibewiki status` and expand `vibewiki doctor` planning around config,

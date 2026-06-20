@@ -22,6 +22,7 @@ from .review import (
 from .review_plan import ReviewPlanEntry, build_review_plan
 from .retrieval import load_retrieval_config
 from .text_utils import read_text_if_exists
+from .translation import cached_translation_markdown, translate_markdown
 
 
 def render_review_ui(
@@ -40,7 +41,7 @@ def render_review_ui(
     plan_summary = review_plan.payload.get("summary", {})
     if not isinstance(plan_summary, dict):
         plan_summary = {}
-    items = _review_items(selected_patch_dir, decisions, review_plan.items)
+    items = _review_items(root, selected_patch_dir, decisions, review_plan.items)
     session_md = read_text_if_exists(root / ".vibewiki" / "sessions" / session_id / "session.md")
     sections = parse_sections(session_md) if session_md else {}
     goal = sections.get("Goal", "Not provided.").strip()
@@ -304,6 +305,24 @@ def render_review_ui(
       color: inherit;
       padding: 0;
     }}
+    .translation-preview {{
+      border: 1px solid #c4d7d3;
+      border-radius: 8px;
+      padding: 10px;
+      margin: 12px 0;
+      background: #f2fbf8;
+    }}
+    .translation-preview summary {{
+      cursor: pointer;
+      color: var(--teal);
+      font-size: 13px;
+      margin-bottom: 8px;
+    }}
+    .translation-note {{
+      color: var(--muted);
+      font-size: 12px;
+      margin: 4px 0 8px;
+    }}
     .controls {{ display: grid; gap: 8px; margin-top: 12px; }}
     .fields {{ display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }}
     input, textarea {{
@@ -432,6 +451,7 @@ def render_review_ui(
           <div class="text">
             <p>{_i18n("Review one candidate at a time: submit it, discard it, edit Markdown directly, or ask the LLM to revise it from your instructions.", "一次只审核一条候选：提交、不提交、直接改 Markdown，或者写修改意见让 LLM 修订。")}</p>
             <p>{_i18n("The LLM only rewrites the candidate draft. You still decide whether to submit it.", "LLM 只生成修订稿，是否提交仍然由你判断。")}</p>
+            <p>{_i18n("Chinese Markdown previews are display-only and cached locally; the source Markdown stays English.", "中文 Markdown 预览只用于显示，并会本地缓存；源 Markdown 仍然保持英文。")}</p>
           </div>
         </section>
       </aside>
@@ -602,6 +622,13 @@ def serve_review_ui(
                         update_item_body(root, patch_dir=selected_patch_dir, item=item, body=revised)
                         self._redirect(f"Revised {item} with LLM", f"LLM 已修订 {item}")
                         return
+                    if action == "translate":
+                        translate_candidate_markdown(root, body=body)
+                        self._redirect(
+                            f"Generated Chinese preview for {item}",
+                            f"已生成 {item} 的中文预览",
+                        )
+                        return
                     raise ValueError(f"Unknown item action: {action}")
                 if self.path == "/decision":
                     item = _form_value(data, "item")
@@ -689,6 +716,7 @@ def serve_review_ui(
 
 
 def _review_items(
+    project: Path,
     patch_dir: Path,
     decisions: dict[str, ItemDecision],
     review_plan: dict[str, ReviewPlanEntry] | None = None,
@@ -720,6 +748,7 @@ def _review_items(
                     "plan": plan_items.get(item_id),
                     "snippet": _snippet(text),
                     "body": text,
+                    "translation": cached_translation_markdown(project, markdown=text),
                 }
             )
     return items
@@ -769,7 +798,9 @@ def _item_card(item: dict[str, object]) -> str:
     item_status = str(item["status"])
     item_snippet = str(item["snippet"])
     item_body = str(item["body"])
+    item_translation = str(item.get("translation") or "")
     preview_html = _markdown_to_html(item_body)
+    translation_html = _translation_preview(item_translation)
     search_text = " ".join(
         str(value)
         for value in [
@@ -795,11 +826,13 @@ def _item_card(item: dict[str, object]) -> str:
     </div>
   </div>
   <div class="preview">{preview_html}</div>
+  {translation_html}
   <form class="controls" method="post" action="/item-action">
     <input type="hidden" name="item" value="{_escape(item_id)}">
     <div class="simple-actions">
       <button class="primary" type="submit" name="action" value="approve">{_i18n("Submit", "提交")}</button>
       <button class="reject" type="submit" name="action" value="reject">{_i18n("Do Not Submit", "不提交")}</button>
+      <button class="save" type="submit" name="action" value="translate">{_i18n("Chinese Preview", "生成中文预览")}</button>
     </div>
     <details class="review-lab">
       <summary>{_i18n("Edit Markdown or Ask LLM to Revise", "编辑 Markdown 或让 LLM 修改")}</summary>
@@ -812,6 +845,16 @@ def _item_card(item: dict[str, object]) -> str:
     </details>
   </form>
 </article>"""
+
+
+def _translation_preview(markdown: str) -> str:
+    if not markdown.strip():
+        return ""
+    return f"""<details class="translation-preview" open>
+  <summary>{_i18n("Chinese Markdown Preview", "中文 Markdown 预览")}</summary>
+  <p class="translation-note">{_i18n("Display only. The stored Markdown remains English.", "仅用于显示。实际存储的 Markdown 仍然是英文。")}</p>
+  <div class="preview">{_markdown_to_html(markdown)}</div>
+</details>"""
 
 
 def revise_candidate_markdown(project: Path, *, body: str, instruction: str) -> str:
@@ -842,6 +885,10 @@ Current candidate Markdown:
 """
     revised = chat_completion(settings, system=system, user=user)
     return _strip_markdown_fence(revised).strip() + "\n"
+
+
+def translate_candidate_markdown(project: Path, *, body: str) -> str:
+    return translate_markdown(project.resolve(), markdown=body)
 
 
 def _strip_markdown_fence(text: str) -> str:
