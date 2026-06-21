@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from pathlib import Path
 
 from .capture import capture_session
 from .distill import distill_session
+from .events import append_event, format_events, read_events
 from .import_markdown import import_markdown_session
 from .import_url import import_url_session
 from .merge import merge_patches
@@ -249,6 +251,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="Disable embedding retrieval even if configured.",
     )
 
+    events = subparsers.add_parser("events", help="Show the project memory event ledger.")
+    events.add_argument("--type", default="", help="Only show one event type.")
+    events.add_argument("--limit", type=int, default=20, help="Number of latest events to show.")
+    events.add_argument("--json", action="store_true", help="Print JSON instead of text.")
+    events.add_argument("--verbose", action="store_true", help="Show event details.")
+
     return parser
 
 
@@ -257,6 +265,12 @@ def run(args: argparse.Namespace) -> int:
 
     if args.subcommand == "init":
         created = init_project(project, force=args.force)
+        append_event(
+            project,
+            "init",
+            subject=project.name,
+            data={"created": [str(path) for path in created], "force": args.force},
+        )
         if created:
             print("Created or refreshed:")
             for path in created:
@@ -290,6 +304,12 @@ def run(args: argparse.Namespace) -> int:
         print(f"- {paths.session_md}")
         print(f"- {paths.diff_patch}")
         print(f"- {paths.metadata_yaml}")
+        append_event(
+            project,
+            "capture",
+            subject=paths.session_id,
+            data={"goal": goal, "outcome": outcome, "session_dir": str(paths.session_dir)},
+        )
         return 0
 
     if args.subcommand == "distill":
@@ -305,6 +325,12 @@ def run(args: argparse.Namespace) -> int:
         print(f"- {paths.skilllets_dir}")
         print(f"- {paths.prompt_patterns_dir}")
         print(f"- {paths.workflows_dir}")
+        append_event(
+            project,
+            "distill",
+            subject=paths.session_id,
+            data={"patch_dir": str(paths.patch_dir), "session_dir": str(session_dir or "")},
+        )
         return 0
 
     if args.subcommand == "import-markdown":
@@ -325,6 +351,12 @@ def run(args: argparse.Namespace) -> int:
         print(f"- {paths.session_dir / 'raw_session.md'}")
         print(f"- {paths.diff_patch}")
         print(f"- {paths.metadata_yaml}")
+        append_event(
+            project,
+            "import-markdown",
+            subject=paths.session_id,
+            data={"source": str(_path(args.source)), "session_dir": str(paths.session_dir)},
+        )
         return 0
 
     if args.subcommand == "import-url":
@@ -346,6 +378,12 @@ def run(args: argparse.Namespace) -> int:
         print(f"- {paths.session_dir / 'raw_source.html'}")
         print(f"- {paths.diff_patch}")
         print(f"- {paths.metadata_yaml}")
+        append_event(
+            project,
+            "import-url",
+            subject=paths.session_id,
+            data={"url": args.url, "session_dir": str(paths.session_dir)},
+        )
         return 0
 
     if args.subcommand == "review":
@@ -359,6 +397,16 @@ def run(args: argparse.Namespace) -> int:
         )
         decision = "approved" if args.approve else "needs_review"
         print(f"Review recorded ({decision}): {review_paths.review_file}")
+        append_event(
+            project,
+            "review",
+            subject=review_paths.session_id,
+            data={
+                "decision": decision,
+                "patch_dir": str(patch_dir or ""),
+                "notes": args.notes,
+            },
+        )
         return 0
 
     if args.subcommand == "review-item":
@@ -379,6 +427,16 @@ def run(args: argparse.Namespace) -> int:
         print(f"- decision: {args.decision}")
         if args.target:
             print(f"- target: {args.target}")
+        append_event(
+            project,
+            "review-item",
+            subject=args.item,
+            data={
+                "decision": args.decision,
+                "target": args.target,
+                "patch_dir": str(patch_dir or ""),
+            },
+        )
         return 0
 
     if args.subcommand == "review-board":
@@ -386,6 +444,12 @@ def run(args: argparse.Namespace) -> int:
         output = _path(args.output) if args.output else None
         board = generate_review_board(project, patch_dir=patch_dir, output=output)
         print(f"Generated review board: {board}")
+        append_event(
+            project,
+            "review-board",
+            subject=board.name,
+            data={"path": str(board), "patch_dir": str(patch_dir or "")},
+        )
         return 0
 
     if args.subcommand == "review-plan":
@@ -397,6 +461,15 @@ def run(args: argparse.Namespace) -> int:
             review_limit=args.review_limit,
         )
         print(format_review_plan_summary(plan))
+        append_event(
+            project,
+            "review-plan",
+            subject=str(plan.payload.get("session_id", "")),
+            data={
+                "path": str(plan.path),
+                "summary": plan.payload.get("summary", {}),
+            },
+        )
         return 0
 
     if args.subcommand == "review-ui":
@@ -417,13 +490,30 @@ def run(args: argparse.Namespace) -> int:
                 print(f"- {path}")
         else:
             print("Nothing changed; these patches may already be merged.")
+        append_event(
+            project,
+            "merge",
+            subject=(patch_dir.name if patch_dir else ""),
+            data={
+                "patch_dir": str(patch_dir or ""),
+                "changed": [str(path) for path in changed],
+                "force": args.force,
+            },
+        )
         return 0
 
     if args.subcommand == "validate-skill":
         skill_path = _path(args.path) if args.path else default_skill_path(project)
         report = validate_skill_file(skill_path)
         print(report.render())
-        return 0 if report.ok(strict=args.strict) else 1
+        ok = report.ok(strict=args.strict)
+        append_event(
+            project,
+            "validate-skill",
+            subject=str(skill_path),
+            data={"ok": ok, "strict": args.strict},
+        )
+        return 0 if ok else 1
 
     if args.subcommand == "search":
         results = search_memory(
@@ -435,35 +525,62 @@ def run(args: argparse.Namespace) -> int:
             use_embeddings=not args.no_embeddings,
         )
         print(format_search_results(results, verbose=args.verbose), end="")
+        append_event(
+            project,
+            "search",
+            subject=args.query,
+            data={"scope": args.scope or "", "results": len(results)},
+        )
         return 0
 
     if args.subcommand == "ask":
-        print(
-            answer_question(
-                project,
-                args.query,
-                scope=args.scope,
-                max_items=args.max_items,
-                verbose=args.verbose,
-                use_embeddings=not args.no_embeddings,
-            ),
-            end="",
+        answer = answer_question(
+            project,
+            args.query,
+            scope=args.scope,
+            max_items=args.max_items,
+            verbose=args.verbose,
+            use_embeddings=not args.no_embeddings,
+        )
+        print(answer, end="")
+        append_event(
+            project,
+            "ask",
+            subject=args.query,
+            data={"scope": args.scope or "", "max_items": args.max_items or ""},
         )
         return 0
 
     if args.subcommand == "context":
-        print(
-            build_context_pack(
-                project,
-                args.query,
-                scope=args.scope,
-                max_items=args.max_items,
-                max_chars_per_item=args.max_chars,
-                output_format=args.format,
-                use_embeddings=not args.no_embeddings,
-            ),
-            end="",
+        rendered = build_context_pack(
+            project,
+            args.query,
+            scope=args.scope,
+            max_items=args.max_items,
+            max_chars_per_item=args.max_chars,
+            output_format=args.format,
+            use_embeddings=not args.no_embeddings,
         )
+        print(rendered, end="")
+        append_event(
+            project,
+            "context",
+            subject=args.query,
+            data={
+                "scope": args.scope or "",
+                "format": args.format,
+                "max_items": args.max_items or "",
+                "max_chars": args.max_chars or "",
+            },
+        )
+        return 0
+
+    if args.subcommand == "events":
+        events = read_events(project, event_type=args.type, limit=args.limit)
+        if args.json:
+            print(json.dumps(events, ensure_ascii=False, indent=2))
+        else:
+            print(format_events(events, verbose=args.verbose), end="")
         return 0
 
     raise AssertionError(f"Unhandled command: {args.subcommand}")

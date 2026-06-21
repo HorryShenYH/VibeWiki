@@ -29,6 +29,7 @@ The first version is intentionally local and conservative:
 - `vibewiki review` records human approval.
 - `vibewiki review-item` records item-level approve/reject/defer/downgrade/merge/edit decisions.
 - `vibewiki merge` appends approved patches to docs, skills, and agent rules.
+- `vibewiki events` shows the project memory ledger for team audit and reuse.
 - `vibewiki ask` answers human questions from approved and candidate memory.
 - `vibewiki context` emits compact YAML/JSON context packs for AI agents.
 - `vibewiki search` inspects the retrieved evidence directly.
@@ -149,6 +150,7 @@ This creates:
 .vibewiki/
   config.yaml
   skill_registry.yaml
+  events.jsonl
   sessions/
   patches/
   reviews/
@@ -232,6 +234,16 @@ Item decisions are stored as JSON under `.vibewiki/reviews/`. During `merge`,
 rejected or deferred items are skipped, downgraded items are written to the Wiki,
 merged reusable units append to the requested existing slug, and edited items
 carry the reviewed title or summary.
+
+VibeWiki also records a tiny project memory ledger at `.vibewiki/events.jsonl`
+when commands run through the CLI. It is intentionally simple: append-only JSONL
+events for capture/import, distill, review, merge, search, ask, and context
+generation. This gives a team a lightweight audit trail without turning
+VibeWiki into a heavy project-management system:
+
+```bash
+vibewiki events --limit 20 --verbose
+```
 
 VibeWiki also dogfoods this workflow on its own design conversations. See
 [`docs/improvement_backlog.md`](docs/improvement_backlog.md) and

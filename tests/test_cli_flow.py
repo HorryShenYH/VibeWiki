@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from contextlib import redirect_stdout
+import io
 import json
 import os
 import tempfile
@@ -8,7 +10,9 @@ from pathlib import Path
 from unittest.mock import patch
 
 from vibewiki.capture import capture_session
+from vibewiki.cli import build_parser, run as run_cli
 from vibewiki.distill import distill_session
+from vibewiki.events import read_events
 from vibewiki.import_markdown import extract_hint_lines, import_markdown_session
 from vibewiki.import_url import chatgpt_share_to_markdown, html_to_markdown, import_url_session
 from vibewiki.merge import merge_patches
@@ -32,6 +36,14 @@ from vibewiki.validate import validate_skill_file, validate_skill_text
 
 
 class VibeWikiFlowTest(unittest.TestCase):
+    def cli(self, root: Path, *args: str) -> tuple[int, str]:
+        parser = build_parser()
+        namespace = parser.parse_args(["--project", str(root), *args])
+        output = io.StringIO()
+        with redirect_stdout(output):
+            code = run_cli(namespace)
+        return code, output.getvalue()
+
     def test_local_memory_flow(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -49,6 +61,7 @@ class VibeWikiFlowTest(unittest.TestCase):
             self.assertTrue((root / "docs" / "wiki" / "research_notes.md").exists())
             self.assertTrue((root / "docs" / "wiki" / "directions.md").exists())
             self.assertTrue((root / ".vibewiki" / "skill_registry.yaml").exists())
+            self.assertTrue((root / ".vibewiki" / "events.jsonl").exists())
             self.assertIn(".vibewiki/cache/", (root / ".gitignore").read_text(encoding="utf-8"))
             config_text = (root / ".vibewiki" / "config.yaml").read_text(encoding="utf-8")
             self.assertIn("mode: bilingual", config_text)
@@ -96,6 +109,49 @@ class VibeWikiFlowTest(unittest.TestCase):
                 "fix-simulator-mismatch",
                 (root / ".vibewiki" / "skill_registry.yaml").read_text(encoding="utf-8"),
             )
+
+    def test_cli_records_project_event_ledger(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            code, _ = self.cli(root, "init")
+            self.assertEqual(code, 0)
+
+            source = root / "session.md"
+            source.write_text(
+                """# Debug VEMU
+
+We fixed a repeated simulator setup issue.
+""",
+                encoding="utf-8",
+            )
+            code, _ = self.cli(root, "import-markdown", str(source))
+            self.assertEqual(code, 0)
+            events = read_events(root)
+            session_id = str(events[-1]["subject"])
+
+            code, _ = self.cli(
+                root,
+                "distill",
+                "--session-dir",
+                str(root / ".vibewiki" / "sessions" / session_id),
+            )
+            self.assertEqual(code, 0)
+
+            events = read_events(root)
+            event_types = [str(event["type"]) for event in events]
+            self.assertIn("init", event_types)
+            self.assertIn("import-markdown", event_types)
+            self.assertIn("distill", event_types)
+
+            code, rendered = self.cli(root, "events", "--limit", "5", "--verbose")
+            self.assertEqual(code, 0)
+            self.assertIn("import-markdown", rendered)
+            self.assertIn("distill", rendered)
+
+            code, rendered_json = self.cli(root, "events", "--json")
+            self.assertEqual(code, 0)
+            payload = json.loads(rendered_json)
+            self.assertEqual(payload[-1]["type"], "distill")
 
     def test_skill_validation_requires_sections(self) -> None:
         report = validate_skill_text(

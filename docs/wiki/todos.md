@@ -31,9 +31,15 @@ sessions.
   explicit LLM opt-in. Next steps are LLM-assisted clustering for the review
   plan, conflict previews, edit history for LLM revisions, richer diffs, and
   stricter visible-items-reviewed gates.
+- Use the new `.vibewiki/events.jsonl` project memory ledger for simple
+  team-level reports: what sessions were imported, what memories were approved,
+  which queries needed context, and where repeated work may be happening.
 
 ## Medium Priority
 
+- Add a lightweight `vibewiki guard --for ...` command that reads approved
+  memory and the event ledger before an agent starts work, warning about known
+  failures, fragile files, or existing workflows.
 - Improve retrieval citations with better section anchors and source snippets.
 - Clean up stale embedding cache entries when source files change or disappear.
 - Add optional reranking for `search`, `ask`, and `context`.

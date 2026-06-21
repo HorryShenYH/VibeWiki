@@ -120,6 +120,23 @@ diffs, keep edit history for LLM revisions, add LLM-assisted clustering and
 merge suggestions for the review plan, and optionally require all visible items
 to be explicitly reviewed before merge.
 
+### Team Memory Ledger
+
+VibeWiki should stay simple, but team memory needs provenance. The first version
+now keeps an append-only `.vibewiki/events.jsonl` ledger for CLI actions such as
+capture/import, distill, review, merge, search, ask, and context generation.
+
+Implemented:
+
+- `vibewiki events` to inspect the latest project memory events
+- compact JSONL records with timestamp, actor, event type, subject, and small
+  structured details
+- no logging of generated answers or large context payloads, keeping the ledger
+  useful without becoming a second database
+
+Remaining improvements: use the ledger for lightweight token-saving reports,
+pre-action guard warnings, and review/evolution suggestions.
+
 ### Bilingual Wiki Mode
 
 VibeWiki should support Chinese/English mixed work as a first-class mode. The

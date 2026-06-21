@@ -8,7 +8,7 @@ necessarily executable skills.
 Source: VibeWiki self-review conversation, 2026-06-19.
 
 VibeWiki's strongest product idea is to act as a trusted memory compiler for AI
-conversations:
+conversations and human-AI development teams:
 
 ```text
 AI conversation -> evidence -> candidate memory -> human review -> approved memory -> reuse
@@ -22,3 +22,10 @@ conversations may improve the same reusable unit over time.
 Chinese positioning:
 
 > VibeWiki 把人与 AI 协作中产生的经验、灵感、问题和技能，编译成可审查、可演化、可复用的项目记忆。
+
+The project should stay simple at the surface: import conversations, distill
+candidate memory, review, merge, search, ask, and provide compact agent context.
+The deeper product idea is a team-owned memory loop that reduces repeated
+prompting, repeated debugging, and repeated explanation. A small append-only
+event ledger is enough to preserve provenance without turning VibeWiki into a
+large workflow platform.

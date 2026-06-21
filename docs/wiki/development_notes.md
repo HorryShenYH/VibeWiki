@@ -80,6 +80,34 @@ Verification:
 
 - `python3 -m unittest discover -s tests` passed with 22 tests.
 
+## 2026-06-22 Project Memory Ledger
+
+VibeWiki should borrow the useful part of event-sourced coding-agent memory
+systems without becoming a heavy project-management database. The essential
+piece is provenance: a team should know when sessions were imported, candidate
+memory was generated, reviews happened, and compact context was requested.
+
+VibeWiki now writes a small append-only `.vibewiki/events.jsonl` ledger for CLI
+actions:
+
+- `init`
+- `capture`, `import-markdown`, `import-url`
+- `distill`, `review-plan`, `review-board`
+- `review`, `review-item`, `merge`
+- `validate-skill`, `search`, `ask`, `context`
+
+The ledger records timestamp, actor, event type, subject, and compact structured
+details. It intentionally avoids storing large answers or context payloads. The
+new `vibewiki events` command prints a concise timeline or JSON for tooling.
+
+This is the small foundation for future team features such as token-saving
+reports, pre-action guard warnings, and evolution previews.
+
+Verification:
+
+- `python3 -m unittest tests.test_cli_flow.VibeWikiFlowTest.test_cli_records_project_event_ledger`
+  passed.
+
 ## 2026-06-20 Display-Only Markdown Translation Providers
 
 VibeWiki should be comfortable for Chinese-native reviewers without making the

@@ -205,6 +205,11 @@ def init_project(project: Path, force: bool = False) -> list[Path]:
         if write_text_if_allowed(path, text, force=force):
             created.append(path)
 
+    event_log = root / ".vibewiki" / "events.jsonl"
+    if not event_log.exists():
+        event_log.write_text("", encoding="utf-8")
+        created.append(event_log)
+
     if _ensure_gitignore_cache(root):
         created.append(root / ".gitignore")
 
@@ -226,6 +231,9 @@ def ensure_workspace(project: Path) -> None:
     registry = root / ".vibewiki" / "skill_registry.yaml"
     if not registry.exists():
         registry.write_text(REGISTRY_TEMPLATE, encoding="utf-8")
+    event_log = root / ".vibewiki" / "events.jsonl"
+    if not event_log.exists():
+        event_log.write_text("", encoding="utf-8")
     _ensure_gitignore_cache(root)
     for path, text in {
         root / "docs" / "wiki" / "knowledge.md": KNOWLEDGE,
