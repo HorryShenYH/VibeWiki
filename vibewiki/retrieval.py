@@ -126,6 +126,8 @@ def search_memory(
         except (OSError, URLError, ValueError, TimeoutError):
             embedding_scores = {}
 
+    important_tokens = _important_query_tokens(query)
+    intent_tokens = _intent_tokens(query)
     results: list[SearchResult] = []
     for chunk in chunks:
         keyword_score = keyword_scores.get(chunk.id, 0.0)
@@ -133,6 +135,8 @@ def search_memory(
         score = keyword_score
         if embedding_score is not None:
             score += max(0.0, embedding_score) * 3.0
+        score = _apply_important_token_weight(score, chunk, important_tokens)
+        score = _apply_intent_weight(score, chunk, intent_tokens)
         if score <= 0:
             continue
         results.append(
@@ -578,6 +582,84 @@ def _tokens(text: str) -> list[str]:
     return tokens
 
 
+def _important_query_tokens(query: str) -> list[str]:
+    tokens: list[str] = []
+    for value in re.findall(r"[A-Za-z0-9_./-]{3,}", query.lower()):
+        if value in {"the", "and", "for", "with", "how", "what"}:
+            continue
+        tokens.append(value)
+    return tokens
+
+
+def _apply_important_token_weight(
+    score: float,
+    chunk: MemoryChunk,
+    important_tokens: list[str],
+) -> float:
+    if not important_tokens or score <= 0:
+        return score
+    haystack = " ".join(
+        [
+            chunk.title,
+            chunk.section,
+            chunk.text,
+            chunk.source.as_posix(),
+        ]
+    ).lower()
+    matches = sum(1 for token in important_tokens if token in haystack)
+    if matches == 0:
+        return score * 0.25
+    return score + matches * 6.0
+
+
+def _intent_tokens(query: str) -> list[str]:
+    lowered = query.lower()
+    intents: list[str] = []
+    if "运行" in query or "怎么跑" in query or "怎么执行" in query or "run" in lowered:
+        intents.append("run")
+    if "matlab" in lowered:
+        intents.append("matlab")
+    return intents
+
+
+def _apply_intent_weight(
+    score: float,
+    chunk: MemoryChunk,
+    intent_tokens: list[str],
+) -> float:
+    if score <= 0 or not intent_tokens:
+        return score
+    haystack = " ".join(
+        [
+            chunk.kind,
+            chunk.title,
+            chunk.section,
+            chunk.text,
+            chunk.source.as_posix(),
+        ]
+    ).lower()
+    if "run" in intent_tokens and "matlab" in intent_tokens:
+        operational_markers = [
+            "matlab -batch",
+            "ssh ",
+            "scp ",
+            "remote",
+            "worker",
+            "agent",
+            "run_vemu_gold",
+            "artifacts",
+            "远程",
+            "调用",
+            "拉回",
+        ]
+        matches = sum(1 for marker in operational_markers if marker in haystack)
+        if matches:
+            score += min(matches, 4) * 4.0
+        if chunk.kind in {"workflow", "prompt_pattern", "skilllet"}:
+            score += 2.0
+    return score
+
+
 def _embedding_scores(
     project: Path,
     config: RetrievalConfig,
@@ -730,7 +812,11 @@ def _answer_snippet(result: SearchResult) -> str:
     text = re.sub(r"^#+\s*Evidence From Session\s*-?\s*", "", text, flags=re.IGNORECASE)
     text = re.sub(r"^#+\s*", "", text)
     text = re.sub(r"^Evidence From Session\s*-\s*", "", text, flags=re.IGNORECASE)
+    text = re.sub(r"\s+-\s+-\s+", "；", text)
+    text = re.sub(r"\s+-\s+", "；", text)
     text = re.sub(r"\s+", " ", text).strip()
+    if len(text) > 220:
+        text = text[:217].rstrip() + "..."
     return text or result.chunk.title
 
 

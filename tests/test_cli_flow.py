@@ -1028,6 +1028,48 @@ CloudRIC energy efficiency evidence is useful, but its baseline is an internal v
             self.assertTrue(any(result.chunk.status == "candidate" for result in results))
             self.assertIn("CloudRIC", results[0].snippet)
 
+    def test_search_prioritizes_important_code_or_provider_terms(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            init_project(root)
+            (root / "docs" / "wiki" / "vemu.md").write_text(
+                """# VEMU Simulation
+
+## F5
+
+Run simulation with `TARGET_DAG`, `VENUSROW=128`, and `VENUSLANE=16`.
+""",
+                encoding="utf-8",
+            )
+            (root / "docs" / "wiki" / "matlab.md").write_text(
+                """# Remote MATLAB
+
+## Windows Worker
+
+SSH to the Windows host and run `matlab -batch "run_vemu_gold"` to generate
+gold artifacts.
+""",
+                encoding="utf-8",
+            )
+            (root / "docs" / "wiki" / "matlab_reference.md").write_text(
+                """# MATLAB Reference
+
+## NR Demod
+
+MATLAB `nrSymbolDemodulate` can be used as the golden reference for demod data.
+""",
+                encoding="utf-8",
+            )
+
+            results = search_memory(
+                root,
+                "我可以怎么运行matlab仿真",
+                use_embeddings=False,
+            )
+
+            self.assertTrue(results)
+            self.assertIn("Remote MATLAB", results[0].chunk.title)
+
     def test_context_pack_outputs_json_for_agents(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
