@@ -32,6 +32,7 @@ from vibewiki.review_ui import (
     revise_candidate_markdown,
     translate_candidate_markdown,
 )
+from vibewiki.memory_cards import search_memory_cards
 from vibewiki.retrieval import answer_question, build_context_pack, search_memory
 from vibewiki.validate import validate_skill_file, validate_skill_text
 
@@ -1070,6 +1071,94 @@ MATLAB `nrSymbolDemodulate` can be used as the golden reference for demod data.
             self.assertTrue(results)
             self.assertIn("Remote MATLAB", results[0].chunk.title)
 
+    def test_memory_cards_answer_operational_project_memory(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            init_project(root)
+            session_id = "20260622-remote-matlab"
+            patch_dir = root / ".vibewiki" / "patches" / session_id
+            prompt = patch_dir / "prompt_patterns" / "remote-matlab-agent-task-package.md"
+            prompt.parent.mkdir(parents=True)
+            prompt.write_text(
+                """# Prompt Pattern: Remote MATLAB Agent Task Package
+
+Status: candidate
+Kind: prompt_pattern
+Session: 20260622-remote-matlab
+Confidence: medium
+
+## Purpose
+
+Generate a bounded MATLAB Agent task package from DAG context.
+
+## Evidence From Session
+
+- 修通了，V1 远程 MATLAB Agent 链路已经跑完并把 artifacts 拉回服务器。
+- 远端 MATLAB Agent 验证了 `matlab -batch "run_vemu_gold"`。
+""",
+                encoding="utf-8",
+            )
+            finding = patch_dir / "findings" / "idea__windows-ssh.md"
+            finding.parent.mkdir(parents=True)
+            finding.write_text(
+                """# Idea: Windows SSH key login
+
+Status: candidate
+Type: idea
+Session: 20260622-remote-matlab
+
+## Summary
+
+Windows SSH 改成了无密码 key 登录，ssh 27532@10.0.0.133 已可用。
+""",
+                encoding="utf-8",
+            )
+            event = {
+                "schema": 1,
+                "id": "event1",
+                "at": "2026-06-22T01:00:00+08:00",
+                "actor": "alice",
+                "type": "import-markdown",
+                "subject": session_id,
+                "data": {},
+            }
+            (root / ".vibewiki" / "events.jsonl").write_text(
+                json.dumps(event, ensure_ascii=False) + "\n",
+                encoding="utf-8",
+            )
+
+            card_results = search_memory_cards(
+                root,
+                "我可以怎么运行matlab仿真",
+                max_items=5,
+            )
+            code, rendered_cards = self.cli(root, "cards", "我可以怎么运行matlab仿真", "--max-items", "3")
+            code_json, rendered_cards_json = self.cli(
+                root,
+                "cards",
+                "我可以怎么运行matlab仿真",
+                "--max-items",
+                "3",
+                "--json",
+            )
+            with patch.dict(os.environ, {}, clear=True):
+                answer = answer_question(
+                    root,
+                    "我可以怎么运行matlab仿真",
+                    use_embeddings=False,
+                )
+
+            self.assertTrue(card_results)
+            self.assertIn("Remote MATLAB Agent Task Package", card_results[0].card.title)
+            self.assertEqual(code, 0)
+            self.assertIn("Remote MATLAB Agent Task Package", rendered_cards)
+            self.assertEqual(code_json, 0)
+            self.assertEqual(json.loads(rendered_cards_json)[0]["actor"], "alice")
+            self.assertIn("用户 alice 曾经", answer)
+            self.assertIn("ssh 27532@10.0.0.133", answer)
+            self.assertIn('matlab -batch "run_vemu_gold"', answer)
+            self.assertIn("memory cards", answer)
+
     def test_context_pack_outputs_json_for_agents(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -1172,8 +1261,8 @@ Task_nrDemodulate replay uses TARGET_DAG replay and make emu_init.
             self.assertIn("结果：", answer)
             self.assertIn("记录人：alice", answer)
             user_prompt = mocked.call_args.kwargs["user"]
-            self.assertIn('"recorded_by": "alice"', user_prompt)
-            self.assertIn("Confidence hint", user_prompt)
+            self.assertIn('"actor": "alice"', user_prompt)
+            self.assertIn("Memory cards", user_prompt)
 
     def test_embedding_search_writes_local_cache(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

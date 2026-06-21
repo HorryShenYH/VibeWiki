@@ -13,6 +13,7 @@ from urllib.request import Request, urlopen
 
 from .events import read_events
 from .llm import chat_completion, clean_chat_response, llm_settings
+from .memory_cards import cards_payload, format_card_answer, search_memory_cards
 from .project import ensure_workspace
 from .text_utils import read_text_if_exists, slugify
 
@@ -297,6 +298,46 @@ def answer_question(
 ) -> str:
     root = project.resolve()
     config = load_retrieval_config(root)
+    settings = llm_settings(
+        base_url_env=config.llm_base_url_env,
+        api_key_env=config.llm_api_key_env,
+        model_env=config.llm_model_env,
+    )
+    card_results = search_memory_cards(
+        root,
+        query,
+        scope=scope or config.default_scope,
+        max_items=max_items or config.ask_max_items,
+    )
+    if card_results:
+        card_draft = format_card_answer(card_results, root=root, verbose=verbose)
+        if not settings:
+            return card_draft
+        system = (
+            "You answer questions using VibeWiki memory cards. "
+            "A memory card is a compact project-memory fact with actor, claim, "
+            "method, result, confidence, and source. Do not expose chain-of-thought. "
+            "Prefer the card meaning over raw snippets. Be direct and short. "
+            "Use this format exactly:\n"
+            "结果：...\n"
+            "可信度：高/中/低（short reason）\n"
+            "记录人：...\n"
+            "来源：1-3 short source paths\n"
+            "If the cards are insufficient, say what is missing in one line."
+        )
+        user = f"""Question:
+{query}
+
+Memory cards:
+{cards_payload(card_results, root=root, max_chars=config.ask_context_chars)}
+
+Write only the compact answer. Do not include a separate evidence dump.
+"""
+        try:
+            return clean_chat_response(chat_completion(settings, system=system, user=user)).rstrip() + "\n"
+        except RuntimeError as exc:
+            return card_draft + f"\nLLM answer failed, so the memory-card draft above was used.\nReason: {exc}\n"
+
     draft, results = build_answer_draft(
         root,
         query,
@@ -308,11 +349,6 @@ def answer_question(
     if not results:
         return draft
 
-    settings = llm_settings(
-        base_url_env=config.llm_base_url_env,
-        api_key_env=config.llm_api_key_env,
-        model_env=config.llm_model_env,
-    )
     if not settings:
         return draft
 

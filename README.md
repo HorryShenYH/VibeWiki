@@ -255,14 +255,22 @@ VibeWiki has two reuse entrances:
 
 ```bash
 vibewiki ask "CloudRIC 能不能说比传统基站省电？"
+vibewiki cards "远程 MATLAB 仿真"
 vibewiki context --for "debug VCMXMUL mismatch"
 ```
 
-`ask` is for humans. It searches approved memory and candidate patches, then
-answers with evidence. If an OpenAI-compatible LLM API is configured, VibeWiki
-uses it to write a compact answer with a confidence hint, recorder, and source
-paths. Otherwise it returns a short retrieval-based answer draft. Use
-`--verbose` or `search` when you want to inspect the underlying evidence.
+`ask` is for humans. It first searches compact memory cards that summarize
+who did what, how, with what result, confidence, recorder, and source. If an
+OpenAI-compatible LLM API is configured, VibeWiki asks the model to answer from
+those cards instead of long raw snippets. If no card matches, it falls back to
+local Markdown retrieval. Use `--verbose` or `search` when you want to inspect
+the underlying evidence.
+
+`cards` shows the compact memory layer directly:
+
+```bash
+vibewiki cards "怎么运行 MATLAB 仿真" --json
+```
 
 `context` is for AI agents. It returns a compact, machine-readable context pack
 so a coding agent can start with relevant facts, skills, warnings, and sources

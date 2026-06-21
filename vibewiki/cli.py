@@ -11,6 +11,7 @@ from .events import append_event, format_events, read_events
 from .import_markdown import import_markdown_session
 from .import_url import import_url_session
 from .merge import merge_patches
+from .memory_cards import cards_to_json, collect_memory_cards, format_memory_cards, search_memory_cards
 from .project import init_project
 from .review import patch_summary, record_item_decision, review_patches
 from .review_board import generate_review_board
@@ -250,6 +251,13 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Disable embedding retrieval even if configured.",
     )
+
+    cards = subparsers.add_parser("cards", help="Show compact VibeWiki memory cards.")
+    cards.add_argument("query", nargs="?", default="", help="Optional card search query.")
+    cards.add_argument("--scope", choices=["approved", "candidate", "all"], default="all")
+    cards.add_argument("--max-items", type=int, default=10, help="Maximum cards to show.")
+    cards.add_argument("--json", action="store_true", help="Print JSON instead of text.")
+    cards.add_argument("--verbose", action="store_true", help="Show tags and details.")
 
     events = subparsers.add_parser("events", help="Show the project memory event ledger.")
     events.add_argument("--type", default="", help="Only show one event type.")
@@ -572,6 +580,28 @@ def run(args: argparse.Namespace) -> int:
                 "max_items": args.max_items or "",
                 "max_chars": args.max_chars or "",
             },
+        )
+        return 0
+
+    if args.subcommand == "cards":
+        if args.query:
+            items = search_memory_cards(
+                project,
+                args.query,
+                scope=args.scope,
+                max_items=args.max_items,
+            )
+        else:
+            items = collect_memory_cards(project, scope=args.scope)[: args.max_items]
+        if args.json:
+            print(cards_to_json(items, root=project.resolve()), end="")
+        else:
+            print(format_memory_cards(items, root=project.resolve(), verbose=args.verbose), end="")
+        append_event(
+            project,
+            "cards",
+            subject=args.query,
+            data={"scope": args.scope, "results": len(items)},
         )
         return 0
 
