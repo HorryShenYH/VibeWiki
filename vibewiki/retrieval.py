@@ -11,7 +11,8 @@ from pathlib import Path
 from urllib.error import URLError
 from urllib.request import Request, urlopen
 
-from .llm import chat_completion, llm_settings
+from .events import read_events
+from .llm import chat_completion, clean_chat_response, llm_settings
 from .project import ensure_workspace
 from .text_utils import read_text_if_exists, slugify
 
@@ -250,33 +251,33 @@ def build_answer_draft(
     if not results:
         return "No matching VibeWiki memory found.\n", results
 
+    confidence, reason = _confidence_for_results(results)
+    recorders = _recorders_for_results(root, results)
+    top = results[0]
     lines = [
-        "# Answer Draft",
-        "",
-        "No LLM API is configured, so this is a retrieval-based draft.",
-        "Review the evidence before treating the answer as final.",
-        "",
+        f"结果：{_answer_snippet(top)}",
+        f"可信度：{confidence}（{reason}）",
+        f"记录人：{', '.join(recorders) if recorders else 'unknown'}",
+        f"来源：{_relative(top.chunk.source, root)}",
     ]
     if any(result.chunk.status == "candidate" for result in results):
-        lines.extend(
-            [
-                "Some evidence is marked candidate and has not been reviewed yet.",
-                "",
-            ]
-        )
-    lines.extend(["## Likely Relevant Memory", ""])
-    for index, result in enumerate(results, 1):
-        chunk = result.chunk
-        lines.extend(
-            [
-                f"{index}. [{chunk.status}] {chunk.kind}: {chunk.title}",
-                f"   source: {_relative(chunk.source, root)}",
-                f"   section: {chunk.section or 'Document'}",
-                f"   snippet: {result.snippet}",
-                "",
-            ]
-        )
-        if verbose:
+        lines.append("备注：无 LLM API，以上为检索草稿；含未审核 candidate。")
+    else:
+        lines.append("备注：无 LLM API，以上为检索草稿。")
+    if verbose:
+        lines.extend(["", "## Evidence", ""])
+        for index, result in enumerate(results, 1):
+            chunk = result.chunk
+            lines.extend(
+                [
+                    f"{index}. [{chunk.status}] {chunk.kind}: {chunk.title}",
+                    f"   recorded_by: {_recorded_by_for_source(root, chunk.source)}",
+                    f"   source: {_relative(chunk.source, root)}",
+                    f"   section: {chunk.section or 'Document'}",
+                    f"   snippet: {result.snippet}",
+                    "",
+                ]
+            )
             lines.extend(["   text:", *[f"     {line}" for line in chunk.text.splitlines()], ""])
     return "\n".join(lines).rstrip() + "\n", results
 
@@ -311,21 +312,31 @@ def answer_question(
     if not settings:
         return draft
 
+    confidence, reason = _confidence_for_results(results)
     system = (
-        "You answer questions using VibeWiki project memory. Be concise. "
-        "Distinguish approved memory from candidate memory. Cite source paths. "
-        "If the evidence is insufficient, say what is missing."
+        "You answer questions using VibeWiki project memory. "
+        "Do not reveal chain-of-thought or reasoning traces. "
+        "Be direct and short. Default output must be at most 6 lines. "
+        "Use this format exactly:\n"
+        "结果：...\n"
+        "可信度：高/中/低（short reason）\n"
+        "记录人：...\n"
+        "来源：1-3 short source paths\n"
+        "If evidence is insufficient, say what is missing in one line."
     )
     user = f"""Question:
 {query}
 
+Confidence hint:
+{confidence} - {reason}
+
 Evidence:
 {_llm_evidence(results, root, max_chars=config.ask_context_chars)}
 
-Write a direct answer for a human maintainer. End with a short Evidence list.
+Write only the compact answer. Do not add a separate evidence section unless the user explicitly asked for details.
 """
     try:
-        return chat_completion(settings, system=system, user=user).rstrip() + "\n"
+        return clean_chat_response(chat_completion(settings, system=system, user=user)).rstrip() + "\n"
     except RuntimeError as exc:
         return draft + f"\nLLM answer failed, so the retrieval draft above was used.\nReason: {exc}\n"
 
@@ -357,10 +368,60 @@ def _llm_evidence(results: list[SearchResult], root: Path, *, max_chars: int) ->
                 "title": chunk.title,
                 "section": chunk.section,
                 "source": _relative(chunk.source, root).as_posix(),
+                "recorded_by": _recorded_by_for_source(root, chunk.source),
                 "snippet": text,
             }
         )
     return json.dumps(items, ensure_ascii=False, indent=2)
+
+
+def _confidence_for_results(results: list[SearchResult]) -> tuple[str, str]:
+    approved = sum(1 for result in results if result.chunk.status == "approved")
+    candidate = sum(1 for result in results if result.chunk.status == "candidate")
+    if approved >= 2 and candidate == 0:
+        return "高", "多条已审核记忆命中"
+    if approved:
+        return "中", "有已审核记忆命中，但证据可能不完整"
+    if candidate >= 3:
+        return "中", "多条候选记忆命中，但尚未人工审核"
+    return "低", "只命中少量或未审核记忆"
+
+
+def _recorders_for_results(root: Path, results: list[SearchResult]) -> list[str]:
+    recorders: list[str] = []
+    for result in results:
+        recorder = _recorded_by_for_source(root, result.chunk.source)
+        if recorder != "unknown" and recorder not in recorders:
+            recorders.append(recorder)
+    return recorders
+
+
+def _recorded_by_for_source(root: Path, source: Path) -> str:
+    session_id = _session_id_for_source(root, source)
+    if not session_id:
+        return "unknown"
+    for event in reversed(read_events(root)):
+        if str(event.get("subject", "")) != session_id:
+            continue
+        event_type = str(event.get("type", ""))
+        if event_type in {"capture", "import-markdown", "import-url", "distill"}:
+            actor = str(event.get("actor", "")).strip()
+            if actor:
+                return actor
+    return "unknown"
+
+
+def _session_id_for_source(root: Path, source: Path) -> str:
+    relative = _relative(source, root)
+    parts = relative.parts
+    for marker in [(".vibewiki", "patches"), (".vibewiki", "sessions")]:
+        try:
+            index = parts.index(marker[0])
+        except ValueError:
+            continue
+        if len(parts) > index + 2 and parts[index + 1] == marker[1]:
+            return parts[index + 2]
+    return ""
 
 
 def _candidate_files(root: Path) -> list[Path]:
@@ -659,8 +720,18 @@ def _context_item(result: SearchResult, root: Path, max_chars: int) -> dict[str,
         "section": chunk.section,
         "score": round(result.score, 4),
         "source": _relative(chunk.source, root).as_posix(),
+        "recorded_by": _recorded_by_for_source(root, chunk.source),
         "text": _truncate(chunk.text, max_chars),
     }
+
+
+def _answer_snippet(result: SearchResult) -> str:
+    text = result.snippet.strip()
+    text = re.sub(r"^#+\s*Evidence From Session\s*-?\s*", "", text, flags=re.IGNORECASE)
+    text = re.sub(r"^#+\s*", "", text)
+    text = re.sub(r"^Evidence From Session\s*-\s*", "", text, flags=re.IGNORECASE)
+    text = re.sub(r"\s+", " ", text).strip()
+    return text or result.chunk.title
 
 
 def _snippet(text: str, query: str, limit: int) -> str:

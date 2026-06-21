@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from dataclasses import dataclass
 from urllib.error import URLError
 from urllib.request import Request, urlopen
@@ -113,4 +114,15 @@ def chat_completion(
     message = choices[0].get("message") if isinstance(choices[0], dict) else None
     if not isinstance(message, dict) or not isinstance(message.get("content"), str):
         raise RuntimeError("LLM response did not include message content.")
-    return message["content"].strip()
+    return clean_chat_response(message["content"])
+
+
+def clean_chat_response(text: str) -> str:
+    cleaned = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL | re.IGNORECASE)
+    cleaned = re.sub(
+        r"<reasoning>.*?</reasoning>",
+        "",
+        cleaned,
+        flags=re.DOTALL | re.IGNORECASE,
+    )
+    return cleaned.strip()

@@ -15,7 +15,7 @@ from vibewiki.distill import distill_session
 from vibewiki.events import read_events
 from vibewiki.import_markdown import extract_hint_lines, import_markdown_session
 from vibewiki.import_url import chatgpt_share_to_markdown, html_to_markdown, import_url_session
-from vibewiki.llm import llm_settings
+from vibewiki.llm import clean_chat_response, llm_settings
 from vibewiki.merge import merge_patches
 from vibewiki.project import init_project
 from vibewiki.review import (
@@ -804,6 +804,13 @@ echo "# this stays code"
         self.assertEqual(settings.api_key, "local-token")
         self.assertEqual(settings.model, "local-model")
 
+    def test_clean_chat_response_removes_thinking_trace(self) -> None:
+        cleaned = clean_chat_response(
+            "<think>hidden reasoning</think>\n结果：Task replay is ready."
+        )
+
+        self.assertEqual(cleaned, "结果：Task replay is ready.")
+
     def test_review_ui_translation_uses_libretranslate_and_cache(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -1049,6 +1056,7 @@ Set `TARGET_DAG`, build DSL, then run the emulator.
             self.assertEqual(payload["query"], "how to run VEMU F5 TARGET_DAG")
             self.assertTrue(payload["items"])
             self.assertEqual(payload["items"][0]["status"], "approved")
+            self.assertIn("recorded_by", payload["items"][0])
             self.assertIn("TARGET_DAG", payload["items"][0]["text"])
 
     def test_ask_without_llm_returns_retrieval_draft(self) -> None:
@@ -1068,9 +1076,62 @@ VCMXMUL Gauss form is not bit-exact for fixed-point OFDM.
             with patch.dict(os.environ, {}, clear=True):
                 answer = answer_question(root, "VCMXMUL OFDM bit exact?", use_embeddings=False)
 
-            self.assertIn("Answer Draft", answer)
+            self.assertIn("结果：", answer)
+            self.assertIn("可信度：", answer)
+            self.assertIn("记录人：", answer)
             self.assertIn("VCMXMUL", answer)
             self.assertIn("docs/wiki/knowledge.md", answer)
+
+    def test_ask_llm_receives_recorded_by_and_returns_compact_answer(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            init_project(root)
+            session_id = "20260622-010000-task-replay"
+            finding = root / ".vibewiki" / "patches" / session_id / "findings" / "knowledge__replay.md"
+            finding.parent.mkdir(parents=True, exist_ok=True)
+            finding.write_text(
+                """# Knowledge: Task Replay
+
+Status: candidate
+Kind: knowledge
+
+## Summary
+
+Task_nrDemodulate replay uses TARGET_DAG replay and make emu_init.
+""",
+                encoding="utf-8",
+            )
+            event = {
+                "schema": 1,
+                "id": "event1",
+                "at": "2026-06-22T01:00:00+08:00",
+                "actor": "alice",
+                "type": "import-markdown",
+                "subject": session_id,
+                "data": {},
+            }
+            (root / ".vibewiki" / "events.jsonl").write_text(
+                json.dumps(event, ensure_ascii=False) + "\n",
+                encoding="utf-8",
+            )
+
+            with patch.dict(os.environ, {"VIBEWIKI_LLM_API_KEY": "token"}, clear=True):
+                with patch(
+                    "vibewiki.retrieval.chat_completion",
+                    return_value="<think>secret</think>\n结果：切到 replay DAG 后跑 make emu_init。\n可信度：中（候选记忆）\n记录人：alice\n来源：.vibewiki/patches/20260622-010000-task-replay/findings/knowledge__replay.md",
+                ) as mocked:
+                    answer = answer_question(
+                        root,
+                        "Task_nrDemodulate replay 怎么做？",
+                        use_embeddings=False,
+                    )
+
+            self.assertNotIn("<think>", answer)
+            self.assertIn("结果：", answer)
+            self.assertIn("记录人：alice", answer)
+            user_prompt = mocked.call_args.kwargs["user"]
+            self.assertIn('"recorded_by": "alice"', user_prompt)
+            self.assertIn("Confidence hint", user_prompt)
 
     def test_embedding_search_writes_local_cache(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

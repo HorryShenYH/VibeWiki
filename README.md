@@ -260,8 +260,9 @@ vibewiki context --for "debug VCMXMUL mismatch"
 
 `ask` is for humans. It searches approved memory and candidate patches, then
 answers with evidence. If an OpenAI-compatible LLM API is configured, VibeWiki
-uses it to write a concise answer. Otherwise it returns a retrieval-based answer
-draft with source snippets.
+uses it to write a compact answer with a confidence hint, recorder, and source
+paths. Otherwise it returns a short retrieval-based answer draft. Use
+`--verbose` or `search` when you want to inspect the underlying evidence.
 
 `context` is for AI agents. It returns a compact, machine-readable context pack
 so a coding agent can start with relevant facts, skills, warnings, and sources
