@@ -6,6 +6,14 @@ from dataclasses import dataclass
 from urllib.error import URLError
 from urllib.request import Request, urlopen
 
+OPENAI_BASE_URL_ENV = "OPENAI_BASE_URL"
+OPENAI_API_KEY_ENV = "OPENAI_API_KEY"
+OPENAI_MODEL_ENV = "OPENAI_MODEL"
+MINIMAX_BASE_URL_ENV = "MINIMAX_BASE_URL"
+MINIMAX_API_KEY_ENV = "MINIMAX_API_KEY"
+MINIMAX_MODEL_ENV = "MINIMAX_MODEL"
+MINIMAX_OPENAI_BASE_URL = "https://api.minimaxi.com/v1"
+
 
 class LLMNotConfigured(RuntimeError):
     """Raised when an optional LLM distiller is requested but unavailable."""
@@ -30,16 +38,46 @@ def llm_settings(
     api_key_env: str,
     model_env: str,
 ) -> LLMSettings | None:
-    base_url = os.getenv(base_url_env, "").strip()
-    api_key = os.getenv(api_key_env, "").strip()
-    model = os.getenv(model_env, "").strip()
+    base_url = _env(base_url_env)
+    api_key = _env(api_key_env)
+    model = _env(model_env)
+    using_minimax_alias = False
+
+    if not base_url:
+        base_url = _env(OPENAI_BASE_URL_ENV)
+        using_minimax_alias = _looks_like_minimax(base_url)
+    if not api_key:
+        api_key = _env(OPENAI_API_KEY_ENV)
+    if not model:
+        model = _env(OPENAI_MODEL_ENV)
+
+    if not api_key and _env(MINIMAX_API_KEY_ENV):
+        api_key = _env(MINIMAX_API_KEY_ENV)
+        using_minimax_alias = True
+        if not base_url:
+            base_url = _env(MINIMAX_BASE_URL_ENV) or MINIMAX_OPENAI_BASE_URL
+        if not model:
+            model = _env(MINIMAX_MODEL_ENV)
+
     if not base_url and not api_key and not model:
         return None
+    if _looks_like_minimax(base_url):
+        using_minimax_alias = True
+    if using_minimax_alias and not model:
+        model = "MiniMax-M1"
     return LLMSettings(
         base_url=base_url or "https://api.openai.com/v1",
         api_key=api_key,
         model=model or "gpt-4.1-mini",
     )
+
+
+def _env(name: str) -> str:
+    return os.getenv(name, "").strip()
+
+
+def _looks_like_minimax(base_url: str) -> bool:
+    return "minimaxi.com" in base_url.lower() or "minimax.chat" in base_url.lower()
 
 
 def chat_completion(

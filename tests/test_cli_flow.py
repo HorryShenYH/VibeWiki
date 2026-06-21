@@ -15,6 +15,7 @@ from vibewiki.distill import distill_session
 from vibewiki.events import read_events
 from vibewiki.import_markdown import extract_hint_lines, import_markdown_session
 from vibewiki.import_url import chatgpt_share_to_markdown, html_to_markdown, import_url_session
+from vibewiki.llm import llm_settings
 from vibewiki.merge import merge_patches
 from vibewiki.project import init_project
 from vibewiki.review import (
@@ -747,6 +748,61 @@ echo "# this stays code"
 
             self.assertEqual(revised, "# Revised Candidate\n\nStatus: candidate\n")
             self.assertTrue(mocked.called)
+
+    def test_llm_settings_support_minimax_openai_compatible_env(self) -> None:
+        env = {
+            "OPENAI_BASE_URL": "https://api.minimaxi.com/v1",
+            "OPENAI_API_KEY": "minimax-token",
+            "OPENAI_MODEL": "MiniMax-M1",
+        }
+        with patch.dict(os.environ, env, clear=True):
+            settings = llm_settings(
+                base_url_env="VIBEWIKI_LLM_BASE_URL",
+                api_key_env="VIBEWIKI_LLM_API_KEY",
+                model_env="VIBEWIKI_LLM_MODEL",
+            )
+
+        self.assertIsNotNone(settings)
+        assert settings is not None
+        self.assertEqual(settings.base_url, "https://api.minimaxi.com/v1")
+        self.assertEqual(settings.api_key, "minimax-token")
+        self.assertEqual(settings.model, "MiniMax-M1")
+
+    def test_llm_settings_support_minimax_key_alias(self) -> None:
+        with patch.dict(os.environ, {"MINIMAX_API_KEY": "minimax-token"}, clear=True):
+            settings = llm_settings(
+                base_url_env="VIBEWIKI_LLM_BASE_URL",
+                api_key_env="VIBEWIKI_LLM_API_KEY",
+                model_env="VIBEWIKI_LLM_MODEL",
+            )
+
+        self.assertIsNotNone(settings)
+        assert settings is not None
+        self.assertEqual(settings.base_url, "https://api.minimaxi.com/v1")
+        self.assertEqual(settings.api_key, "minimax-token")
+        self.assertEqual(settings.model, "MiniMax-M1")
+
+    def test_llm_settings_prefers_vibewiki_env(self) -> None:
+        env = {
+            "VIBEWIKI_LLM_BASE_URL": "http://local-llm/v1",
+            "VIBEWIKI_LLM_API_KEY": "local-token",
+            "VIBEWIKI_LLM_MODEL": "local-model",
+            "OPENAI_BASE_URL": "https://api.minimaxi.com/v1",
+            "OPENAI_API_KEY": "minimax-token",
+            "OPENAI_MODEL": "MiniMax-M1",
+        }
+        with patch.dict(os.environ, env, clear=True):
+            settings = llm_settings(
+                base_url_env="VIBEWIKI_LLM_BASE_URL",
+                api_key_env="VIBEWIKI_LLM_API_KEY",
+                model_env="VIBEWIKI_LLM_MODEL",
+            )
+
+        self.assertIsNotNone(settings)
+        assert settings is not None
+        self.assertEqual(settings.base_url, "http://local-llm/v1")
+        self.assertEqual(settings.api_key, "local-token")
+        self.assertEqual(settings.model, "local-model")
 
     def test_review_ui_translation_uses_libretranslate_and_cache(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

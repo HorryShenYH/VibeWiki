@@ -301,6 +301,34 @@ export VIBEWIKI_LLM_MODEL="gpt-4.1-mini"
 The same environment variable shape can point at OpenRouter, DeepSeek, local
 OpenAI-compatible servers, or other compatible providers.
 
+MiniMax Token Plan can use its OpenAI-compatible endpoint directly:
+
+```bash
+export VIBEWIKI_LLM_BASE_URL="https://api.minimaxi.com/v1"
+export VIBEWIKI_LLM_API_KEY="..."
+export VIBEWIKI_LLM_MODEL="MiniMax-M1"
+```
+
+VibeWiki also recognizes the provider-style variables from MiniMax/OpenAI SDK
+examples, so this works too:
+
+```bash
+export OPENAI_BASE_URL="https://api.minimaxi.com/v1"
+export OPENAI_API_KEY="..."
+export OPENAI_MODEL="MiniMax-M1"
+```
+
+Or, for the shortest MiniMax setup:
+
+```bash
+export MINIMAX_API_KEY="..."
+# optional override
+export MINIMAX_MODEL="MiniMax-M1"
+```
+
+Do not commit API keys. If you keep them in a local `.env`, source that file in
+your shell before running VibeWiki.
+
 Markdown preview translation is configured separately so review does not burn
 LLM tokens by accident. For a free/self-hosted LibreTranslate-compatible server:
 
