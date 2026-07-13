@@ -59,6 +59,14 @@ vibewiki review-board
 Then open `.vibewiki/dashboard.html` for the memory dashboard, or the generated
 review board under `.vibewiki/patches/<session>/`.
 
+## Interface Preview
+
+`vibewiki dashboard` generates a static, dependency-free HTML dashboard. It
+defaults to English for open-source demos and includes an `EN / 中文` switch in
+the page.
+
+![VibeWiki dashboard showing memory status, review funnel, and card type charts](docs/assets/dashboard.png)
+
 For the full walkthrough, see [`docs/demo.md`](docs/demo.md).
 
 `vibewiki setup` is the recommended first-run experience. It asks whether you
@@ -310,12 +318,13 @@ For a visual project-memory overview, generate the dashboard:
 
 ```bash
 vibewiki dashboard
-vibewiki dashboard --lang en --output docs/vibewiki_dashboard.html
+vibewiki dashboard --output docs/vibewiki_dashboard.html
 ```
 
 The dashboard is a static, dependency-free HTML page with memory-card status,
 review backlog, card type distribution, recent activity, and the next suggested
-command. It is meant for humans, demos, and team standups; `context` remains the
+command. It defaults to English and has an in-page Chinese/English switch. It
+is meant for humans, demos, and team standups; `context` remains the
 token-conscious interface for AI agents.
 
 For fine-grained review, use the per-item commands shown on each card:

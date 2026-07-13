@@ -234,7 +234,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="Generate a local HTML dashboard with VibeWiki memory charts.",
     )
     dashboard.add_argument("--output", default=None, help="HTML file to write.")
-    dashboard.add_argument("--lang", choices=["zh", "en"], default="zh", help="Dashboard language.")
+    dashboard.add_argument("--lang", choices=["zh", "en"], default="en", help="Dashboard language.")
 
     merge = subparsers.add_parser("merge", help="Merge approved patches into project memory.")
     merge.add_argument("--patch-dir", default=None, help="Specific patch directory to merge.")

@@ -82,10 +82,11 @@ vibewiki dashboard
 Open `.vibewiki/dashboard.html` to inspect memory status, review backlog, card
 types, recent activity, and the next suggested command.
 
-For an English UI:
+The dashboard defaults to English for demos and includes an in-page `EN / 中文`
+switch. To pre-render a Chinese-first file:
 
 ```bash
-vibewiki dashboard --lang en
+vibewiki dashboard --lang zh
 ```
 
 ## 6. Review

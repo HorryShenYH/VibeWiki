@@ -805,13 +805,21 @@ make emu_init
             self.assertIn("candidate", html)
             self.assertIn("<svg", html)
             self.assertIn('data-vibewiki-dashboard="1"', html)
+            self.assertIn('data-lang-choice="en"', html)
+            self.assertIn('data-lang-choice="zh"', html)
+            self.assertIn("setDashboardLang", html)
 
             output = root / "dashboard.html"
-            code, rendered = self.cli(root, "dashboard", "--output", str(output), "--lang", "zh")
+            code, rendered = self.cli(root, "dashboard", "--output", str(output))
             self.assertEqual(code, 0)
             self.assertTrue(output.exists())
             self.assertIn("Generated dashboard:", rendered)
-            self.assertIn("VibeWiki 仪表盘", output.read_text(encoding="utf-8"))
+            self.assertIn("VibeWiki Dashboard", output.read_text(encoding="utf-8"))
+
+            zh_output = root / "dashboard_zh.html"
+            code, _ = self.cli(root, "dashboard", "--output", str(zh_output), "--lang", "zh")
+            self.assertEqual(code, 0)
+            self.assertIn("VibeWiki 仪表盘", zh_output.read_text(encoding="utf-8"))
 
     def test_review_plan_triages_raw_candidates(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

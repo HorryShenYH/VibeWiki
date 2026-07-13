@@ -52,6 +52,8 @@ LABELS = {
         "events": "events",
         "source": "source",
         "actor": "actor",
+        "cards_short": "cards",
+        "language": "Language",
     },
     "zh": {
         "title": "VibeWiki 仪表盘",
@@ -79,6 +81,8 @@ LABELS = {
         "events": "事件",
         "source": "来源",
         "actor": "记录人",
+        "cards_short": "卡片",
+        "language": "语言",
     },
 }
 
@@ -101,7 +105,7 @@ class DashboardData:
     next_steps: list[str]
 
 
-def generate_dashboard(project: Path, *, output: Path | None = None, lang: str = "zh") -> Path:
+def generate_dashboard(project: Path, *, output: Path | None = None, lang: str = "en") -> Path:
     root = project.expanduser().resolve()
     data = build_dashboard_data(root)
     output_path = output.expanduser().resolve() if output else root / ".vibewiki" / "dashboard.html"
@@ -142,9 +146,8 @@ def build_dashboard_data(project: Path) -> DashboardData:
     )
 
 
-def render_dashboard_html(data: DashboardData, *, lang: str = "zh") -> str:
-    clean_lang = lang if lang in LABELS else "zh"
-    labels = LABELS[clean_lang]
+def render_dashboard_html(data: DashboardData, *, lang: str = "en") -> str:
+    clean_lang = lang if lang in LABELS else "en"
     approved_cards = data.status_counts.get("approved", 0)
     candidate_cards = data.status_counts.get("candidate", 0)
     reviewed_items = sum(data.decision_counts.values())
@@ -152,21 +155,30 @@ def render_dashboard_html(data: DashboardData, *, lang: str = "zh") -> str:
     candidate_items = candidate_cards
     open_items = max(candidate_items - reviewed_items, 0)
     funnel = [
-        (labels["sessions"], len(data.sessions)),
-        (labels["patches"], len(data.patches)),
-        (labels["candidate"], candidate_items),
-        (labels["reviewed_items"], reviewed_items),
-        (labels["approved_items"], approved_items),
+        ("sessions", len(data.sessions)),
+        ("patches", len(data.patches)),
+        ("candidate", candidate_items),
+        ("reviewed_items", reviewed_items),
+        ("approved_items", approved_items),
     ]
     status_segments = [
-        (labels["approved"], approved_cards, PALETTE[0]),
-        (labels["candidate"], candidate_cards, PALETTE[2]),
+        ("approved", approved_cards, PALETTE[0]),
+        ("candidate", candidate_cards, PALETTE[2]),
     ]
     kind_rows = _top_counts(data.kind_counts, limit=7)
     event_rows = _top_counts(data.event_counts, limit=7)
     event_total = sum(data.event_counts.values())
     recent_cards = _recent_cards(data.cards, limit=6)
     next_steps = data.next_steps or ["vibewiki init"]
+    translations = _dashboard_translations(
+        event_total=event_total,
+        open_items=open_items,
+        approved_cards=approved_cards,
+        candidate_cards=candidate_cards,
+        reviewed_items=reviewed_items,
+    )
+    labels = translations[clean_lang]
+    translations_json = json.dumps(translations, ensure_ascii=False, sort_keys=True)
 
     return f"""<!doctype html>
 <html lang="{_escape(clean_lang)}" data-vibewiki-dashboard="1">
@@ -250,6 +262,32 @@ def render_dashboard_html(data: DashboardData, *, lang: str = "zh") -> str:
       font-size: 15px;
       margin-bottom: 4px;
       overflow-wrap: anywhere;
+    }}
+    .lang-switch {{
+      display: inline-flex;
+      gap: 4px;
+      margin-top: 12px;
+      padding: 4px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: var(--field);
+    }}
+    .lang-switch button {{
+      min-width: 48px;
+      min-height: 30px;
+      border: 0;
+      border-radius: 999px;
+      background: transparent;
+      color: var(--muted);
+      cursor: pointer;
+      font: inherit;
+      font-size: 12px;
+      font-weight: 800;
+    }}
+    .lang-switch button[aria-pressed="true"] {{
+      background: #fff;
+      color: var(--ink);
+      box-shadow: 0 1px 4px rgba(23, 32, 42, 0.12);
     }}
     .metrics {{
       display: grid;
@@ -434,87 +472,146 @@ def render_dashboard_html(data: DashboardData, *, lang: str = "zh") -> str:
   <main class="shell">
     <section class="hero">
       <div>
-        <div class="eyebrow">{_escape(labels["eyebrow"])}</div>
+        <div class="eyebrow" data-i18n="eyebrow">{_escape(labels["eyebrow"])}</div>
         <h1>{_escape(data.project_name)}</h1>
-        <p class="subtitle">{_escape(labels["subtitle"])}</p>
+        <p class="subtitle" data-i18n="subtitle">{_escape(labels["subtitle"])}</p>
       </div>
       <aside class="stamp">
-        <strong>{_escape(labels["workspace"])}: {_escape(_workspace_state(data, labels))}</strong>
-        {_escape(labels["generated"])}: {_escape(data.generated_at)}
+        <strong><span data-i18n="workspace">{_escape(labels["workspace"])}</span>: {_escape(_workspace_state(data, labels))}</strong>
+        <span data-i18n="generated">{_escape(labels["generated"])}</span>: {_escape(data.generated_at)}
+        <div class="lang-switch" role="group" aria-label="{_escape(labels["language"])}">
+          <button type="button" data-lang-choice="en" aria-pressed="{_escape(str(clean_lang == "en").lower())}">EN</button>
+          <button type="button" data-lang-choice="zh" aria-pressed="{_escape(str(clean_lang == "zh").lower())}">中文</button>
+        </div>
       </aside>
     </section>
 
     <section class="metrics" aria-label="VibeWiki metrics">
-      {_metric(labels["sessions"], len(data.sessions), f'{event_total} {labels["events"]}')}
-      {_metric(labels["patches"], len(data.patches), f'{open_items} {labels["open_items"]}')}
-      {_metric(labels["cards"], len(data.cards), f'{approved_cards} {labels["approved"]} / {candidate_cards} {labels["candidate"]}')}
-      {_metric(labels["reviews"], len(data.review_files), f'{reviewed_items} {labels["reviewed_items"]}')}
+      {_metric("sessions", len(data.sessions), "sessions_detail", labels)}
+      {_metric("patches", len(data.patches), "patches_detail", labels)}
+      {_metric("cards", len(data.cards), "cards_detail", labels)}
+      {_metric("reviews", len(data.review_files), "reviews_detail", labels)}
     </section>
 
     <section class="next">
-      <h2>{_escape(labels["next"])}</h2>
+      <h2 data-i18n="next">{_escape(labels["next"])}</h2>
       <code>{_escape(next_steps[0])}</code>
     </section>
 
     <section class="grid">
       <div class="panel">
-        <h2>{_escape(labels["status"])}</h2>
+        <h2 data-i18n="status">{_escape(labels["status"])}</h2>
         <div class="chart-grid">
-          {_donut_svg(status_segments)}
+          {_donut_svg(status_segments, labels)}
           <div class="legend">
-            {_legend(status_segments)}
+            {_legend(status_segments, labels)}
           </div>
         </div>
       </div>
 
       <div class="panel">
-        <h2>{_escape(labels["funnel"])}</h2>
-        {_funnel_svg(funnel)}
+        <h2 data-i18n="funnel">{_escape(labels["funnel"])}</h2>
+        {_funnel_svg(funnel, labels)}
       </div>
 
       <div class="panel">
-        <h2>{_escape(labels["types"])}</h2>
+        <h2 data-i18n="types">{_escape(labels["types"])}</h2>
         {_bar_svg(kind_rows, empty_label=labels["no_data"])}
       </div>
 
       <div class="panel">
-        <h2>{_escape(labels["activity"])}</h2>
+        <h2 data-i18n="activity">{_escape(labels["activity"])}</h2>
         {_event_list(data.recent_events, labels)}
       </div>
 
       <div class="panel">
-        <h2>{_escape(labels["recent_cards"])}</h2>
+        <h2 data-i18n="recent_cards">{_escape(labels["recent_cards"])}</h2>
         {_card_list(recent_cards, data.root, labels)}
       </div>
 
       <div class="panel">
-        <h2>{_escape(labels["events"])}</h2>
+        <h2 data-i18n="events">{_escape(labels["events"])}</h2>
         {_bar_svg(event_rows, empty_label=labels["no_data"])}
       </div>
     </section>
 
     <p class="footer">VibeWiki keeps the storage boring and the memory reviewable.</p>
   </main>
+  <script>
+    const translations = {translations_json};
+    function setDashboardLang(lang) {{
+      const next = translations[lang] ? lang : "en";
+      document.documentElement.lang = next;
+      document.querySelectorAll("[data-i18n]").forEach((node) => {{
+        const key = node.getAttribute("data-i18n");
+        if (key && translations[next][key] !== undefined) {{
+          node.textContent = translations[next][key];
+        }}
+      }});
+      document.querySelectorAll("[data-lang-choice]").forEach((button) => {{
+        button.setAttribute("aria-pressed", String(button.getAttribute("data-lang-choice") === next));
+      }});
+      try {{
+        window.localStorage.setItem("vibewiki.dashboard.lang", next);
+      }} catch (error) {{}}
+    }}
+    document.querySelectorAll("[data-lang-choice]").forEach((button) => {{
+      button.addEventListener("click", () => setDashboardLang(button.getAttribute("data-lang-choice") || "en"));
+    }});
+    let savedLang = "{_escape(clean_lang)}";
+    try {{
+      savedLang = window.localStorage.getItem("vibewiki.dashboard.lang") || "{_escape(clean_lang)}";
+    }} catch (error) {{}}
+    setDashboardLang(savedLang);
+  </script>
 </body>
 </html>
 """
 
 
-def _metric(label: str, value: int, detail: str) -> str:
+def _dashboard_translations(
+    *,
+    event_total: int,
+    open_items: int,
+    approved_cards: int,
+    candidate_cards: int,
+    reviewed_items: int,
+) -> dict[str, dict[str, str]]:
+    translations = {lang: dict(labels) for lang, labels in LABELS.items()}
+    translations["en"].update(
+        {
+            "sessions_detail": f"{event_total} events",
+            "patches_detail": f"{open_items} open items",
+            "cards_detail": f"{approved_cards} approved / {candidate_cards} candidate",
+            "reviews_detail": f"{reviewed_items} reviewed items",
+        }
+    )
+    translations["zh"].update(
+        {
+            "sessions_detail": f"{event_total} 事件",
+            "patches_detail": f"{open_items} 待审核",
+            "cards_detail": f"{approved_cards} 已审核 / {candidate_cards} 候选",
+            "reviews_detail": f"{reviewed_items} 已处理",
+        }
+    )
+    return translations
+
+
+def _metric(label_key: str, value: int, detail_key: str, labels: dict[str, str]) -> str:
     return f"""<article class="metric">
   <b>{value}</b>
-  <span>{_escape(label)}</span>
-  <small>{_escape(detail)}</small>
+  <span data-i18n="{_escape(label_key)}">{_escape(labels[label_key])}</span>
+  <small data-i18n="{_escape(detail_key)}">{_escape(labels[detail_key])}</small>
 </article>"""
 
 
-def _donut_svg(segments: list[tuple[str, int, str]]) -> str:
+def _donut_svg(segments: list[tuple[str, int, str]], labels: dict[str, str]) -> str:
     total = sum(value for _, value, _ in segments)
     if total <= 0:
-        return """<svg viewBox="0 0 120 120" role="img" aria-label="No memory cards">
+        return f"""<svg viewBox="0 0 120 120" role="img" aria-label="No memory cards">
   <circle cx="60" cy="60" r="42" fill="none" stroke="#d9ded8" stroke-width="16"/>
   <text x="60" y="57" text-anchor="middle" font-size="18" font-weight="800" fill="#17202a">0</text>
-  <text x="60" y="74" text-anchor="middle" font-size="10" fill="#667085">cards</text>
+  <text x="60" y="74" text-anchor="middle" font-size="10" fill="#667085" data-i18n="cards_short">{_escape(labels["cards_short"])}</text>
 </svg>"""
     circumference = 2 * math.pi * 42
     offset = 0.0
@@ -536,19 +633,19 @@ def _donut_svg(segments: list[tuple[str, int, str]]) -> str:
     return f"""<svg viewBox="0 0 120 120" role="img" aria-label="Memory status">
   {"".join(circles)}
   <text x="60" y="58" text-anchor="middle" font-size="20" font-weight="800" fill="#17202a">{total}</text>
-  <text x="60" y="75" text-anchor="middle" font-size="10" fill="#667085">cards</text>
+  <text x="60" y="75" text-anchor="middle" font-size="10" fill="#667085" data-i18n="cards_short">{_escape(labels["cards_short"])}</text>
 </svg>"""
 
 
-def _legend(segments: list[tuple[str, int, str]]) -> str:
+def _legend(segments: list[tuple[str, int, str]], labels: dict[str, str]) -> str:
     if not any(value for _, value, _ in segments):
-        return '<div class="muted">No memory cards yet.</div>'
+        return f'<div class="muted" data-i18n="no_data">{_escape(labels["no_data"])}</div>'
     rows = []
-    for label, value, color in segments:
+    for label_key, value, color in segments:
         rows.append(
             f"""<div class="legend-row">
   <span class="swatch" style="background:{_escape(color)}"></span>
-  <span>{_escape(label)}</span>
+  <span data-i18n="{_escape(label_key)}">{_escape(labels[label_key])}</span>
   <span class="count">{value}</span>
 </div>"""
         )
@@ -557,7 +654,7 @@ def _legend(segments: list[tuple[str, int, str]]) -> str:
 
 def _bar_svg(rows: list[tuple[str, int]], *, empty_label: str) -> str:
     if not rows:
-        return f'<p class="muted">{_escape(empty_label)}</p>'
+        return f'<p class="muted" data-i18n="no_data">{_escape(empty_label)}</p>'
     width = 640
     row_height = 42
     left = 150
@@ -587,17 +684,17 @@ def _bar_svg(rows: list[tuple[str, int]], *, empty_label: str) -> str:
     return "\n".join(parts)
 
 
-def _funnel_svg(rows: list[tuple[str, int]]) -> str:
+def _funnel_svg(rows: list[tuple[str, int]], labels: dict[str, str]) -> str:
     width = 640
     height = 260
     max_value = max((value for _, value in rows), default=0) or 1
     parts = [f'<svg viewBox="0 0 {width} {height}" role="img" aria-label="Review funnel">']
-    for index, (label, value) in enumerate(rows):
+    for index, (label_key, value) in enumerate(rows):
         y = 20 + index * 46
         bar_width = max(4, 420 * value / max_value) if value else 4
         color = PALETTE[index % len(PALETTE)]
         parts.append(
-            f'<text x="0" y="{y + 18}" font-size="15" fill="#17202a">{_escape(_shorten(label, 16))}</text>'
+            f'<text x="0" y="{y + 18}" font-size="15" fill="#17202a" data-i18n="{_escape(label_key)}">{_escape(_shorten(labels[label_key], 16))}</text>'
         )
         parts.append(f'<rect x="142" y="{y}" width="420" height="24" rx="5" fill="#edf1ec"/>')
         parts.append(f'<rect x="142" y="{y}" width="{bar_width:.2f}" height="24" rx="5" fill="{color}"/>')
@@ -610,7 +707,7 @@ def _funnel_svg(rows: list[tuple[str, int]]) -> str:
 
 def _event_list(events: list[dict[str, object]], labels: dict[str, str]) -> str:
     if not events:
-        return f'<p class="muted">{_escape(labels["no_data"])}</p>'
+        return f'<p class="muted" data-i18n="no_data">{_escape(labels["no_data"])}</p>'
     rows = ['<div class="events">']
     for event in reversed(events):
         event_type = str(event.get("type", "") or "event")
@@ -630,13 +727,16 @@ def _event_list(events: list[dict[str, object]], labels: dict[str, str]) -> str:
 
 def _card_list(cards: list[MemoryCard], root: Path, labels: dict[str, str]) -> str:
     if not cards:
-        return f'<p class="muted">{_escape(labels["no_data"])}</p>'
+        return f'<p class="muted" data-i18n="no_data">{_escape(labels["no_data"])}</p>'
     rows = ['<div class="cards">']
     for card in cards:
         source = _relative(card.source, root)
+        status_key = card.status if card.status in {"approved", "candidate"} else ""
+        status_attr = f' data-i18n="{_escape(status_key)}"' if status_key else ""
+        status = labels.get(status_key, card.status)
         rows.append(
             f"""<div class="card-row">
-  <span class="pill">{_escape(card.status)}</span>
+  <span class="pill"{status_attr}>{_escape(status)}</span>
   <span class="card-title"><strong>{_escape(card.subject or card.title)}</strong><small>{_escape(card.kind)} · {_escape(card.actor)}</small></span>
   <span class="muted">{_escape(source)}</span>
 </div>"""
