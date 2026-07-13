@@ -57,8 +57,6 @@ def render_control_center(
     ensure_workspace(root)
     data = build_dashboard_data(root)
     approved_cards = data.status_counts.get("approved", 0)
-    candidate_cards = data.status_counts.get("candidate", 0)
-    approved_patches = sum(1 for patch in data.patches if _patch_approved(root, patch.name))
     merged_patches = _merged_patch_ids(root)
     pending_reviews = max(len(data.patches) - len(merged_patches), 0)
     config = load_retrieval_config(root)
@@ -338,12 +336,205 @@ def render_control_center(
       .topbar {{ display: block; }}
       .top-actions {{ margin-top: 10px; }}
     }}
+
+    /* Focused workspace layout */
+    :root {{
+      --canvas: #f6f7f9;
+      --paper: #ffffff;
+      --soft: #eef1f4;
+      --ink: #161719;
+      --muted: #65686d;
+      --subtle: #92959a;
+      --line: rgba(22, 23, 25, .09);
+      --line-strong: rgba(22, 23, 25, .15);
+      --teal: #087f75;
+      --blue: #0a71d8;
+      --shadow: 0 18px 60px rgba(28, 37, 44, .07), 0 2px 8px rgba(28, 37, 44, .04);
+    }}
+    body {{ min-width: 320px; background: var(--canvas); }}
+    .app {{ display: block; min-height: 100vh; }}
+    .sidebar {{
+      position: sticky;
+      z-index: 30;
+      top: 0;
+      width: 100%;
+      height: 68px;
+      padding: 10px max(24px, calc((100vw - 1180px) / 2));
+      display: grid;
+      grid-template-columns: auto minmax(360px, 1fr) auto;
+      align-items: center;
+      gap: 22px;
+      border: 0;
+      border-bottom: 1px solid var(--line);
+      background: rgba(249, 250, 251, .84);
+      -webkit-backdrop-filter: saturate(180%) blur(26px);
+      backdrop-filter: saturate(180%) blur(26px);
+    }}
+    .brand {{ gap: 10px; padding: 0; }}
+    .brand-mark {{ width: 36px; height: 36px; filter: drop-shadow(0 4px 8px rgba(20, 35, 45, .13)); }}
+    .brand strong {{ font-size: 15px; font-weight: 700; }}
+    .brand small {{ margin-top: 1px; max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 10px; }}
+    nav {{ display: flex; justify-content: center; gap: 4px; }}
+    nav a {{
+      min-height: 38px;
+      padding: 8px 11px;
+      display: inline-flex;
+      justify-content: center;
+      gap: 7px;
+      border: 1px solid transparent;
+      border-radius: 8px;
+      font-size: 12px;
+      font-weight: 620;
+      white-space: nowrap;
+    }}
+    nav a::before {{ display: none; }}
+    nav a svg {{ width: 16px; height: 16px; flex: 0 0 auto; }}
+    nav a:hover {{ background: rgba(255, 255, 255, .7); }}
+    nav a.active {{ border-color: var(--line); background: #fff; box-shadow: 0 1px 4px rgba(24, 31, 37, .07); }}
+    .nav-badge {{
+      min-width: 18px;
+      height: 18px;
+      padding: 0 5px;
+      display: inline-grid;
+      place-items: center;
+      border-radius: 9px;
+      background: #e7edf1;
+      color: #5e646a;
+      font-size: 9px;
+      font-variant-numeric: tabular-nums;
+    }}
+    nav a.active .nav-badge {{ background: #dff3ef; color: #176e66; }}
+    .top-actions {{ display: flex; align-items: center; justify-content: flex-end; gap: 8px; margin: 0; }}
+    .memory-state {{ display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 10px; white-space: nowrap; }}
+    .memory-state i, .bridge-state i {{ width: 6px; height: 6px; border-radius: 50%; background: #24a06f; box-shadow: 0 0 0 3px rgba(36, 160, 111, .10); }}
+    .language {{ background: rgba(237, 239, 242, .78); box-shadow: none; }}
+    .language button {{ min-width: 34px; min-height: 26px; font-size: 10px; }}
+    .icon-button {{ width: 34px; min-width: 34px; min-height: 34px; padding: 0; display: grid; place-items: center; }}
+    .icon-button svg {{ width: 15px; height: 15px; }}
+    .main {{ width: 100%; max-width: 1180px; margin: 0 auto; padding: 40px 30px 72px; }}
+    .message {{ max-width: 980px; margin: 0 auto 22px; }}
+    [data-view-panel] {{ display: none; }}
+    .app[data-active-view="ask"] [data-view-panel="ask"],
+    .app[data-active-view="add"] [data-view-panel="add"],
+    .app[data-active-view="attention"] [data-view-panel="attention"],
+    .app[data-active-view="memory"] [data-view-panel="memory"] {{ display: block; }}
+    .command-center {{ max-width: 980px; margin: 54px auto 0; }}
+    .ask-hero {{ display: flex; justify-content: space-between; align-items: flex-start; gap: 24px; margin-bottom: 30px; }}
+    .eyebrow {{ color: var(--teal); font: 700 10px/1.2 ui-monospace, SFMono-Regular, Menlo, monospace; text-transform: uppercase; }}
+    .ask-hero h1 {{ margin: 12px 0 0; font-size: 44px; line-height: 1.06; font-weight: 720; }}
+    .ask-hero p {{ margin: 9px 0 0; color: var(--muted); font-size: 13px; }}
+    .connection {{ margin-top: 3px; padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; background: rgba(255,255,255,.58); }}
+    .query-switch {{ width: fit-content; display: inline-flex; gap: 3px; margin-bottom: 10px; padding: 3px; border-radius: 8px; background: #e9ecef; }}
+    .query-switch button {{ min-height: 31px; padding: 5px 10px; display: inline-flex; align-items: center; gap: 6px; border: 0; background: transparent; color: var(--muted); font-size: 11px; box-shadow: none; }}
+    .query-switch button svg {{ width: 14px; height: 14px; }}
+    .query-switch button.active {{ background: #fff; color: var(--ink); box-shadow: 0 1px 4px rgba(24,31,37,.10); }}
+    .query-panel[hidden] {{ display: none; }}
+    .ask-form {{
+      min-height: 70px;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 9px 8px 20px;
+      border: 1px solid rgba(18, 24, 28, .13);
+      border-radius: 8px;
+      background: #fff;
+      box-shadow: var(--shadow);
+    }}
+    .ask-form:focus-within {{ border-color: rgba(10, 113, 216, .45); box-shadow: 0 0 0 4px rgba(10,113,216,.08), var(--shadow); }}
+    .ask-form input {{ height: 52px; padding: 0; border: 0; background: transparent; box-shadow: none; font-size: 17px; }}
+    .ask-form input:focus {{ box-shadow: none; }}
+    .send-button {{ width: 48px; min-width: 48px; height: 48px; padding: 0; display: grid; place-items: center; }}
+    .send-button svg {{ width: 19px; height: 19px; }}
+    .system-strip {{
+      margin-top: 34px;
+      padding: 17px 2px;
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 18px;
+      border-top: 1px solid var(--line);
+      border-bottom: 1px solid var(--line);
+      color: var(--muted);
+      font-size: 10px;
+    }}
+    .system-strip span {{ min-width: 0; display: flex; align-items: center; gap: 8px; white-space: nowrap; }}
+    .system-strip b {{ color: var(--ink); font-size: 16px; font-weight: 660; font-variant-numeric: tabular-nums; }}
+    .bridge-state {{ justify-content: flex-end; color: #28775d; }}
+    .result {{ margin-top: 18px; border: 1px solid var(--line); border-radius: 8px; background: #fff; overflow: hidden; }}
+    .result-head {{ margin: 0; padding: 10px 12px; border-bottom: 1px solid var(--line); }}
+    .result pre {{ max-height: 430px; border-radius: 0; }}
+    .columns {{ display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(300px, .75fr); gap: 16px; align-items: start; }}
+    .columns > div {{ display: contents; }}
+    .panel {{ margin: 28px 0 0; border-color: var(--line); background: rgba(255,255,255,.88); box-shadow: 0 8px 32px rgba(27, 36, 43, .045); }}
+    .focus-panel {{ grid-column: 1 / -1; max-width: 940px; width: 100%; margin: 28px auto 0; }}
+    .memory-panel {{ grid-column: 1; }}
+    .memory-insights {{ grid-column: 2; }}
+    .panel-head {{ min-height: 62px; padding: 17px 20px; }}
+    .panel-head h2 {{ font-size: 18px; font-weight: 680; }}
+    .section-count {{ min-width: 26px; height: 24px; padding: 0 7px; display: inline-grid; place-items: center; border-radius: 8px; background: #eef1f3; color: var(--muted); font-size: 10px; font-weight: 700; }}
+    .attention-count {{ background: #fff0eb; color: #a65540; }}
+    .panel-body {{ padding: 19px 20px 21px; }}
+    .tabs {{ margin-bottom: 18px; }}
+    .form-stack {{ gap: 14px; }}
+    .form-stack textarea {{ min-height: 210px; }}
+    .queue-row {{ min-height: 68px; grid-template-columns: minmax(0, 1fr) auto auto; padding: 13px 20px; }}
+    .queue-row .review-count {{ display: none; }}
+    .queue-title strong {{ font-size: 13px; }}
+    .queue-title small {{ display: block; margin-top: 3px; }}
+    .memory-row {{ padding: 14px 20px; }}
+    .memory-meta {{ flex-wrap: wrap; }}
+    .bar-row {{ grid-template-columns: 90px minmax(0,1fr) 24px; }}
+    details.advanced summary {{ padding: 14px 20px; }}
+
+    @media (max-width: 900px) {{
+      .sidebar {{ height: auto; min-height: 64px; grid-template-columns: auto 1fr auto; gap: 12px; padding: 9px 16px; }}
+      nav a {{ padding: 8px; }}
+      nav a svg {{ display: none; }}
+      .memory-state {{ display: none; }}
+      .columns {{ grid-template-columns: 1fr; }}
+      .memory-panel, .memory-insights {{ grid-column: 1; }}
+      .memory-insights {{ margin-top: 0; }}
+    }}
+    @media (max-width: 680px) {{
+      .sidebar {{ grid-template-columns: 1fr auto; }}
+      .brand-mark {{ width: 34px; height: 34px; }}
+      .brand small {{ max-width: 120px; }}
+      nav {{ grid-column: 1 / -1; grid-row: 2; display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); width: 100%; }}
+      nav a {{ min-width: 0; padding: 7px 4px; font-size: 10px; }}
+      nav a svg {{ display: block; width: 14px; height: 14px; }}
+      .top-actions {{ grid-column: 2; grid-row: 1; }}
+      .sidebar {{ padding-bottom: 8px; }}
+      .main {{ padding: 26px 16px 48px; }}
+      .command-center {{ margin-top: 28px; }}
+      .ask-hero {{ margin-bottom: 24px; }}
+      .ask-hero h1 {{ font-size: 36px; }}
+      .connection {{ font-size: 9px; }}
+      .system-strip {{ grid-template-columns: repeat(2, minmax(0,1fr)); }}
+      .bridge-state {{ justify-content: flex-start; }}
+      .form-grid {{ grid-template-columns: 1fr; }}
+      .queue-row {{ grid-template-columns: 1fr auto; }}
+      .queue-row .status {{ display: none; }}
+    }}
+    @media (max-width: 430px) {{
+      .brand small, .language {{ display: none; }}
+      nav a {{ gap: 4px; }}
+      .ask-hero {{ display: block; }}
+      .connection {{ width: fit-content; margin-top: 15px; }}
+      .ask-form {{ min-height: 62px; padding-left: 14px; }}
+      .ask-form input {{ height: 46px; font-size: 15px; }}
+      .send-button {{ width: 44px; min-width: 44px; height: 44px; }}
+      .system-strip {{ gap: 12px; }}
+      .system-strip span {{ white-space: normal; }}
+      .panel-head, .panel-body {{ padding-left: 15px; padding-right: 15px; }}
+      .queue-row {{ grid-template-columns: 1fr; }}
+      .row-actions {{ justify-content: flex-start; }}
+    }}
   </style>
 </head>
 <body>
-  <div class="app">
+  <div class="app" data-active-view="ask">
     <aside class="sidebar">
-      <a class="brand" href="#overview">
+      <a class="brand" href="#ask" data-view-choice="ask">
         <span class="brand-mark" aria-hidden="true">
           <svg viewBox="0 0 64 64">
             <rect width="64" height="64" rx="12" fill="#24333F"/>
@@ -352,86 +543,69 @@ def render_control_center(
             <path d="M28 54H36" stroke="#F0B84B" stroke-width="2" stroke-linecap="round"/>
           </svg>
         </span>
-        <span><strong>VibeWiki</strong><small>{_i18n("Memory control", "记忆中控")}</small></span>
+        <span><strong>VibeWiki</strong><small>{_escape(data.project_name)}</small></span>
       </a>
       <nav aria-label="Primary">
-        <a class="active" href="#overview">{_i18n("Overview", "概览")}</a>
-        <a href="#add">{_i18n("Add", "导入")}</a>
-        <a href="#work">{_i18n("Review", "审核")}</a>
-        <a href="#reuse">{_i18n("Ask", "提问")}</a>
-        <a href="#memory">{_i18n("Memory", "记忆")}</a>
+        <a class="active" href="#ask" data-view-choice="ask" aria-selected="true">{_icon("sparkles")}{_i18n("Ask", "提问")}</a>
+        <a href="#add" data-view-choice="add" aria-selected="false">{_icon("plus")}{_i18n("Add", "添加")}</a>
+        <a href="#attention" data-view-choice="attention" aria-selected="false">{_icon("bell")}{_i18n("Attention", "待处理")}<b class="nav-badge">{pending_reviews}</b></a>
+        <a href="#memory" data-view-choice="memory" aria-selected="false">{_icon("book")}{_i18n("Memory", "记忆")}</a>
       </nav>
-      <div class="side-status">
-        <span>{_i18n("Workspace", "工作区")}</span>
-        <strong>{_escape(data.project_name)}</strong>
+      <div class="top-actions">
+        <span class="memory-state"><i></i>{approved_cards} {_i18n("trusted", "可信")}</span>
+        <div class="language" role="group" aria-label="Language">
+          <button type="button" data-lang-choice="en" aria-pressed="true">EN</button>
+          <button type="button" data-lang-choice="zh" aria-pressed="false">中文</button>
+        </div>
+        <a class="button quiet icon-button" href="/" title="Refresh" aria-label="Refresh">{_icon("refresh")}</a>
       </div>
     </aside>
 
     <main class="main">
-      <header class="topbar" id="overview">
-        <div>
-          <h1>{_escape(data.project_name)}</h1>
-          <p>{_i18n("Memory Control Center · Live workspace", "记忆中控台 · 当前工作区")}</p>
-        </div>
-        <div class="top-actions">
-          <a class="button quiet button-icon" href="/">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <path d="M21 12a9 9 0 0 1-15.2 6.5L3 16"/><path d="M3 21v-5h5"/>
-              <path d="M3 12A9 9 0 0 1 18.2 5.5L21 8"/><path d="M21 3v5h-5"/>
-            </svg>
-            {_i18n("Refresh", "刷新")}
-          </a>
-          <div class="language" role="group" aria-label="Language">
-            <button type="button" data-lang-choice="en" aria-pressed="true">EN</button>
-            <button type="button" data-lang-choice="zh" aria-pressed="false">中文</button>
-          </div>
-        </div>
-      </header>
-
       {message_html}
 
-      <section class="panel command-center" id="reuse">
-        <div class="panel-head command-head">
-          <div class="command-title">
-            <span class="command-icon" aria-hidden="true">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/>
-              </svg>
-            </span>
-            <h2>{_i18n("Ask project memory", "向项目记忆提问")}</h2>
+      <section class="command-center" id="ask" data-view-panel="ask">
+        <div class="ask-hero">
+          <div>
+            <span class="eyebrow">{_i18n("PROJECT MEMORY", "项目记忆")}</span>
+            <h1>{_i18n("Ask VibeWiki", "问问 VibeWiki")}</h1>
+            <p>{_escape(data.project_name)}</p>
           </div>
-          <span class="connection">{_i18n("LLM connected" if configured_llm else "Local answer mode", "LLM 已连接" if configured_llm else "本地回答模式")}</span>
+          <span class="connection">{_i18n("LLM connected" if configured_llm else "Local mode", "LLM 已连接" if configured_llm else "本地模式")}</span>
         </div>
-        <div class="command-body">
-          <form method="post" action="/action/ask">
+        <div class="query-switch" role="tablist">
+          <button class="active" type="button" data-query-mode="answer" aria-selected="true">{_icon("message")}{_i18n("Answer", "回答")}</button>
+          <button type="button" data-query-mode="context" aria-selected="false">{_icon("cpu")}{_i18n("Agent context", "Agent 上下文")}</button>
+        </div>
+        <div class="query-panel" data-query-panel="answer">
+          <form class="ask-form" method="post" action="/action/ask">
             <label class="visually-hidden" for="memory-query">{_i18n("Question", "问题")}</label>
-            <input id="memory-query" required name="query" data-placeholder-en="What does this project already know?" data-placeholder-zh="这个项目已经知道什么？" placeholder="What does this project already know?">
-            <button class="primary" type="submit">{_i18n("Ask", "提问")}</button>
+            <input id="memory-query" autofocus required name="query" data-placeholder-en="What should I know?" data-placeholder-zh="我应该知道什么？" placeholder="What should I know?">
+            <button class="primary send-button" type="submit" title="Ask" aria-label="Ask">{_icon("arrow")}</button>
           </form>
-          <form method="post" action="/action/context">
+        </div>
+        <div class="query-panel" data-query-panel="context" hidden>
+          <form class="ask-form" method="post" action="/action/context">
             <label class="visually-hidden" for="agent-task">{_i18n("Agent task", "Agent 任务")}</label>
-            <input id="agent-task" required name="query" data-placeholder-en="Prepare context for an AI task" data-placeholder-zh="为 AI 任务准备上下文" placeholder="Prepare context for an AI task">
-            <button class="secondary" type="submit">{_i18n("Build context", "生成上下文")}</button>
+            <input id="agent-task" required name="query" data-placeholder-en="Describe the task for your agent" data-placeholder-zh="描述要交给 Agent 的任务" placeholder="Describe the task for your agent">
+            <button class="primary send-button" type="submit" title="Build context" aria-label="Build context">{_icon("arrow")}</button>
           </form>
         </div>
         {result_html}
+        <div class="system-strip">
+          <span><b>{approved_cards}</b>{_i18n("Trusted memories", "可信记忆")}</span>
+          <span><b>{pending_reviews}</b>{_i18n("Need attention", "需要处理")}</span>
+          <span><b>{len(data.sessions)}</b>{_i18n("Conversations", "历史对话")}</span>
+          <span class="bridge-state"><i></i>{_i18n("Agent bridge ready", "Agent 已连接")}</span>
+        </div>
       </section>
-
-      <section class="metrics" aria-label="Memory metrics">
-        {_metric(len(data.sessions), "Conversations", "历史对话", "captured", "已记录")}
-        {_metric(candidate_cards, "Candidates", "候选记忆", f"{pending_reviews} pending", f"{pending_reviews} 待处理")}
-        {_metric(approved_cards, "Trusted memory", "可信记忆", f"{approved_patches} approved batches", f"{approved_patches} 批已批准")}
-        {_metric(len(merged_patches), "Merged", "已合并", "ready to reuse", "可直接复用")}
-      </section>
-
-      {_flow(data, approved_patches, merged_patches)}
 
       <section class="columns">
         <div>
-          <section class="panel" id="add">
+          <section class="panel focus-panel" id="add" data-view-panel="add">
             <div class="panel-head">
               <h2>{_i18n("Add a conversation", "添加一段对话")}</h2>
-              <small>{_i18n("Raw evidence stays local", "原始证据保存在本地")}</small>
+              <span class="section-count">{len(data.sessions)}</span>
             </div>
             <div class="panel-body">
               <div class="tabs" role="tablist">
@@ -481,26 +655,26 @@ def render_control_center(
             </div>
           </section>
 
-          <section class="panel" id="work">
+          <section class="panel focus-panel" id="attention" data-view-panel="attention">
             <div class="panel-head">
-              <h2>{_i18n("Work queue", "处理队列")}</h2>
-              <small>{_escape(str(len(data.sessions)))} {_i18n("conversations", "段对话")}</small>
+              <h2>{_i18n("Needs attention", "需要处理")}</h2>
+              <span class="section-count attention-count">{pending_reviews}</span>
             </div>
             <div class="queue">{session_rows or _empty("No conversations yet", "还没有对话")}</div>
           </section>
         </div>
 
         <div>
-          <section class="panel" id="memory">
+          <section class="panel memory-panel" id="memory" data-view-panel="memory">
             <div class="panel-head">
-              <h2>{_i18n("Recent memory", "最近记忆")}</h2>
-              <small>{_escape(str(len(data.cards)))} {_i18n("cards", "张卡片")}</small>
+              <h2>{_i18n("Project memory", "项目记忆")}</h2>
+              <span class="section-count">{len(data.cards)}</span>
             </div>
             <div class="memory-list">{_memory_rows(latest_cards, root) or _empty("No memory cards yet", "还没有记忆卡片")}</div>
           </section>
 
-          <section class="panel">
-            <div class="panel-head"><h2>{_i18n("Memory mix", "记忆构成")}</h2><small>{_i18n("By type", "按类型")}</small></div>
+          <section class="panel memory-insights" id="memory-insights" data-view-panel="memory">
+            <div class="panel-head"><h2>{_i18n("Memory mix", "记忆构成")}</h2></div>
             <div class="panel-body"><div class="bars">{_kind_bars(kind_rows, max_kind) or _empty("No data yet", "暂无数据")}</div></div>
             <details class="advanced">
               <summary>{_i18n("Project tools", "项目工具")}</summary>
@@ -537,6 +711,42 @@ def render_control_center(
       let savedLanguage = "en";
       try {{ savedLanguage = localStorage.getItem("vibewiki.ui.lang") || "en"; }} catch (error) {{}}
       setLanguage(savedLanguage);
+
+      const app = document.querySelector(".app");
+      const viewChoices = Array.from(document.querySelectorAll("[data-view-choice]"));
+      const viewAliases = {{ overview: "ask", reuse: "ask", work: "attention" }};
+      const validViews = new Set(["ask", "add", "attention", "memory"]);
+      function setView(requested, updateHash = false) {{
+        const aliased = viewAliases[requested] || requested;
+        const selected = validViews.has(aliased) ? aliased : "ask";
+        if (app) app.dataset.activeView = selected;
+        viewChoices.forEach((choice) => {{
+          const active = choice.dataset.viewChoice === selected;
+          choice.classList.toggle("active", active);
+          choice.setAttribute("aria-selected", String(active));
+        }});
+        if (updateHash) history.replaceState(null, "", `#${{selected}}`);
+      }}
+      viewChoices.forEach((choice) => choice.addEventListener("click", (event) => {{
+        event.preventDefault();
+        setView(choice.dataset.viewChoice || "ask", true);
+      }}));
+      window.addEventListener("hashchange", () => setView(location.hash.slice(1)));
+      setView(location.hash.slice(1));
+
+      const queryModeButtons = Array.from(document.querySelectorAll("[data-query-mode]"));
+      const queryPanels = Array.from(document.querySelectorAll("[data-query-panel]"));
+      queryModeButtons.forEach((button) => button.addEventListener("click", () => {{
+        const selected = button.dataset.queryMode;
+        queryModeButtons.forEach((item) => {{
+          const active = item.dataset.queryMode === selected;
+          item.classList.toggle("active", active);
+          item.setAttribute("aria-selected", String(active));
+        }});
+        queryPanels.forEach((panel) => panel.hidden = panel.dataset.queryPanel !== selected);
+        const input = document.querySelector(`[data-query-panel="${{selected}}"] input`);
+        if (input) input.focus();
+      }}));
 
       const tabButtons = Array.from(document.querySelectorAll("[data-tab]"));
       const tabPanels = Array.from(document.querySelectorAll("[data-tab-panel]"));
@@ -865,29 +1075,6 @@ def _auto_distill(project: Path, session_dir: Path, data: dict[str, list[str]]) 
     return True
 
 
-def _flow(data: DashboardData, approved_patches: int, merged_patches: set[str]) -> str:
-    values = [len(data.sessions), len(data.patches), approved_patches, len(merged_patches)]
-    labels = [
-        ("Capture", "记录"),
-        ("Distill", "提炼"),
-        ("Review", "审核"),
-        ("Reuse", "复用"),
-    ]
-    current = next((index for index, value in enumerate(values) if value == 0), 3)
-    steps: list[str] = []
-    for index, ((en, zh), value) in enumerate(zip(labels, values), 1):
-        classes = ["flow-step"]
-        if value > 0:
-            classes.append("done")
-        if index - 1 == current:
-            classes.append("current")
-        steps.append(
-            f'<div class="{" ".join(classes)}"><span class="step-num">{index}</span>'
-            f'<strong>{_i18n(en, zh)}</strong><small>{value} {_i18n("ready", "已完成")}</small></div>'
-        )
-    return f'<section class="flow" aria-label="Memory workflow">{"".join(steps)}</section>'
-
-
 def _session_rows(data: DashboardData, merged_patches: set[str]) -> str:
     rows: list[str] = []
     for session in reversed(data.sessions[-8:]):
@@ -958,13 +1145,6 @@ def _kind_bars(rows: list[tuple[str, int]], max_value: int) -> str:
             f'<div class="bar-fill" style="width:{width:.1f}%"></div></div><strong>{count}</strong></div>'
         )
     return "".join(rendered)
-
-
-def _metric(value: int, en: str, zh: str, detail_en: str, detail_zh: str) -> str:
-    return (
-        f'<article class="metric"><b>{value}</b><span>{_i18n(en, zh)}</span>'
-        f'<small>{_i18n(detail_en, detail_zh)}</small></article>'
-    )
 
 
 def _message(en: str, zh: str) -> str:
@@ -1038,6 +1218,24 @@ def _text(data: dict[str, list[str]], key: str) -> str:
 
 def _i18n(en: str, zh: str) -> str:
     return f'<span data-i18n data-en="{_escape(en)}" data-zh="{_escape(zh)}">{_escape(en)}</span>'
+
+
+def _icon(name: str) -> str:
+    paths = {
+        "sparkles": '<path d="m12 3 1.1 3.2a4 4 0 0 0 2.5 2.5L19 10l-3.4 1.3a4 4 0 0 0-2.5 2.5L12 17l-1.1-3.2a4 4 0 0 0-2.5-2.5L5 10l3.4-1.3a4 4 0 0 0 2.5-2.5L12 3Z"/><path d="m5 3 .4 1.1a2 2 0 0 0 1.2 1.2L8 6l-1.4.7a2 2 0 0 0-1.2 1.2L5 9l-.4-1.1a2 2 0 0 0-1.2-1.2L2 6l1.4-.7a2 2 0 0 0 1.2-1.2L5 3Z"/><path d="m19 15 .5 1.4a2 2 0 0 0 1.1 1.1L22 18l-1.4.5a2 2 0 0 0-1.1 1.1L19 21l-.5-1.4a2 2 0 0 0-1.1-1.1L16 18l1.4-.5a2 2 0 0 0 1.1-1.1L19 15Z"/>',
+        "plus": '<path d="M12 5v14M5 12h14"/>',
+        "bell": '<path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9Z"/><path d="M10 21h4"/>',
+        "book": '<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2Z"/>',
+        "refresh": '<path d="M20 6v5h-5"/><path d="M4 18v-5h5"/><path d="M18.2 9A7 7 0 0 0 6.1 6.6L4 11M20 13l-2.1 4.4A7 7 0 0 1 5.8 15"/>',
+        "message": '<path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4v8Z"/>',
+        "cpu": '<rect width="14" height="14" x="5" y="5" rx="2"/><path d="M9 9h6v6H9zM9 1v4M15 1v4M9 19v4M15 19v4M19 9h4M19 14h4M1 9h4M1 14h4"/>',
+        "arrow": '<path d="m5 12 14-7-4 14-3-6-7-1Z"/><path d="m12 13 7-8"/>',
+    }
+    body = paths.get(name, paths["sparkles"])
+    return (
+        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" '
+        f'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">{body}</svg>'
+    )
 
 
 def _escape(value: object) -> str:

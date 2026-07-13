@@ -27,7 +27,7 @@
   <strong>One command. One control center. No archaeology through old chats.</strong>
 </p>
 
-![VibeWiki control center for importing, reviewing, and reusing AI conversations](docs/assets/control-center.png)
+![VibeWiki's minimal Ask-first project memory control center](docs/assets/control-center.png)
 
 <p align="center">
   <strong>If AI tools should remember what a team has already learned, star
@@ -43,10 +43,10 @@ python3 -m pip install -e .
 vibewiki ui
 ```
 
-Open `http://127.0.0.1:8765/`. Paste a conversation, review the memory draft,
-then ask VibeWiki what your project already knows. The same page can import
-share links, capture results, distill sessions, review candidates, merge trusted
-memory, answer questions, and build compact AI context packs.
+Open `http://127.0.0.1:8765/`. Ask what the project already knows, add a past
+conversation, handle the few items that need attention, or inspect project
+memory. The same quiet workspace can also build compact context packs for AI
+agents.
 
 For VS Code Remote SSH, forward port `8765` and open the same address locally.
 

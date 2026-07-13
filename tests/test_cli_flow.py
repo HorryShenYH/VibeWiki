@@ -874,7 +874,9 @@ make emu_init
             self.assertIn('data-vibewiki-control-center="1"', empty_html)
             self.assertIn('action="/action/import-text"', empty_html)
             self.assertIn('action="/action/ask"', empty_html)
-            self.assertIn("Memory Control Center", empty_html)
+            self.assertIn("Ask VibeWiki", empty_html)
+            self.assertIn('data-active-view="ask"', empty_html)
+            self.assertIn('data-view-choice="attention"', empty_html)
 
             result = perform_console_action(
                 root,
