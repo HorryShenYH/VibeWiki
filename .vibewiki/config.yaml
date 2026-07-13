@@ -19,6 +19,7 @@ distill:
   uncertain_by_default: true
 retrieval:
   default_scope: all
+  agent_scope: approved
   search_max_items: 10
   search_snippet_chars: 500
   context_max_items: 8

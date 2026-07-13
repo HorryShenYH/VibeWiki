@@ -50,6 +50,28 @@ memory, answer questions, and build compact AI context packs.
 
 For VS Code Remote SSH, forward port `8765` and open the same address locally.
 
+## Give Any AI The Project Memory
+
+```bash
+vibewiki agent install
+```
+
+VibeWiki adds a small approved-memory rule block to `AGENTS.md`, writes a local
+MCP descriptor, and prints the command needed to connect an AI client. Codex
+users can register it directly:
+
+```bash
+vibewiki agent install --register-codex
+```
+
+After starting a new agent session, the AI can load a compact project brief,
+check known risks, search reviewed memory, and read only the selected sources.
+It does not need the whole Wiki pasted into every prompt, and candidate memory
+stays excluded unless explicitly requested.
+
+See [`docs/agent-integration.md`](docs/agent-integration.md) for the tool model,
+trust boundary, fallback mode, and protocol smoke test.
+
 ## The Memory Loop
 
 ```text
@@ -70,7 +92,7 @@ a durable home without turning raw chat history into unquestioned truth.
 | Today | With VibeWiki |
 | --- | --- |
 | Search through old chat tabs | Ask one project memory |
-| Explain the same context to every agent | Generate a compact context pack |
+| Explain the same context to every agent | Let the agent retrieve approved memory itself |
 | Let knowledge disappear when a teammate leaves | Keep reviewed memory in the repository |
 | Trust opaque automatic memory | See the source, recorder, status, and confidence |
 | Spend tokens rediscovering old answers | Reuse what the team already paid to learn |
@@ -122,6 +144,8 @@ The control center is the primary interface:
 
 - `vibewiki ui` opens the complete control center.
 
+- `vibewiki agent install` connects an AI agent to approved project memory.
+- `vibewiki mcp` serves brief/search/read/guard tools over local stdio MCP.
 - `vibewiki init` creates the project memory folders.
 - `vibewiki setup` runs the first-time project/personal Wiki setup wizard.
 - `vibewiki doctor` inspects workspace state and suggests the next command.
@@ -140,6 +164,7 @@ The control center is the primary interface:
 - `vibewiki events` shows the project memory ledger for team audit and reuse.
 - `vibewiki ask` answers human questions from approved and candidate memory.
 - `vibewiki context` emits compact YAML/JSON context packs for AI agents.
+- `vibewiki guard` checks a task against approved warnings, rules, and workflows.
 - `vibewiki search` inspects the retrieved evidence directly.
 - `vibewiki understand` generates a quick local project-understanding brief.
 
@@ -399,6 +424,9 @@ instead of making the user rewrite a long prompt:
 ```bash
 vibewiki context --for "upgrade the API client safely" --format json --max-items 5 --max-chars 500
 ```
+
+Agent context defaults to approved memory. Use `--scope all` only when the agent
+must inspect unreviewed candidate leads and can keep them clearly separated.
 
 `search` shows the raw ranked evidence:
 

@@ -191,7 +191,20 @@ Remaining improvements:
 
 ### Retrieval And Reuse Quality
 
-`search`, `ask`, and `context` are present, but retrieval is still v0.1.
+`search`, `ask`, and `context` are present. VibeWiki now also exposes an
+approved-first local stdio MCP bridge with compact project brief, task guard,
+search, and selective-read tools. `vibewiki agent install` adds shared agent
+guidance and a portable connection descriptor without changing the human UI.
+
+Implemented:
+
+- agent context defaults to `retrieval.agent_scope: approved`
+- model-controlled `vibewiki_brief`, `vibewiki_guard`, `vibewiki_search`, and
+  `vibewiki_read` tools
+- explicit candidate opt-in with unreviewed warnings
+- restricted reads that cannot open arbitrary project files
+- MCP resource access for the compact project brief and `AGENTS.md`
+- a non-MCP JSON/YAML context-pack fallback
 
 Needed improvements:
 
@@ -199,8 +212,9 @@ Needed improvements:
 - stale embedding cache cleanup
 - optional reranking
 - more compact context budgets
-- `wiki_search` and `wiki_read` style surfaces for agents
 - `export --format llms-full`
+- relationships and link traversal between related memory cards
+- task-based evaluation of recall, token cost, and repeated-work reduction
 
 ### Merge And Versioning
 

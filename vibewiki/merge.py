@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from .events import recorded_by_for_memory
 from .project import ensure_workspace
 from .registry import (
     ensure_registry,
@@ -53,11 +54,9 @@ def _skip_decision(decision: ItemDecision | None) -> bool:
 
 
 def _approved_body(body: str, decision: ItemDecision | None) -> str:
+    updated = body.replace("Status: candidate", "Status: approved", 1)
     if not decision:
-        return body
-    updated = body
-    if decision.decision in {"approve", "edit", "downgrade", "merge"}:
-        updated = updated.replace("Status: candidate", "Status: approved", 1)
+        return updated
     if decision.title:
         updated = _replace_first_heading(updated, decision.title)
     if decision.summary:
@@ -78,6 +77,25 @@ def _approved_body(body: str, decision: ItemDecision | None) -> str:
     if "## Review Decision" not in updated:
         updated = f"{updated.rstrip()}\n\n{review_block}\n"
     return updated
+
+
+def _merge_body(
+    root: Path,
+    source: Path,
+    decision: ItemDecision | None,
+) -> str:
+    body = _approved_body(read_text_if_exists(source), decision)
+    actor = recorded_by_for_memory(root, source)
+    if not body or actor == "unknown" or "Recorded By:" in body:
+        return body
+    lines = body.rstrip().splitlines()
+    for index, line in enumerate(lines):
+        if line.lower().startswith("session:"):
+            lines.insert(index + 1, f"Recorded By: {actor}")
+            return "\n".join(lines) + "\n"
+    insert_at = 2 if len(lines) >= 2 and lines[0].startswith("# ") else 0
+    lines.insert(insert_at, f"Recorded By: {actor}")
+    return "\n".join(lines) + "\n"
 
 
 def _replace_first_heading(markdown: str, title: str) -> str:
@@ -126,7 +144,7 @@ def _merge_downgraded_item(
     decision: ItemDecision,
     default_kind: str = "knowledge",
 ) -> list[Path]:
-    body = _approved_body(read_text_if_exists(source), decision)
+    body = _merge_body(root, source, decision)
     if not body:
         return []
     target_kind = decision.target if decision.target in FINDING_WIKI_FILES else default_kind
@@ -162,7 +180,7 @@ def _merge_unit_dir(
         if decision and decision.decision == "downgrade":
             changed.extend(_merge_downgraded_item(root, source, session_id, decision))
             continue
-        body = _approved_body(read_text_if_exists(source), decision)
+        body = _merge_body(root, source, decision)
         if not body:
             continue
         slug = _target_unit_slug(source.stem, decision)
@@ -212,7 +230,7 @@ def _merge_findings(
         decision = _decision_for(patch_dir, source, decisions)
         if _skip_decision(decision):
             continue
-        body = _approved_body(read_text_if_exists(source), decision)
+        body = _merge_body(root, source, decision)
         if not body:
             continue
         if "__" in source.stem:
@@ -250,8 +268,8 @@ def merge_patches(
         )
 
     item_decisions = read_item_decisions(root, session_id)
-    knowledge = read_text_if_exists(selected_patch_dir / "knowledge_patch.md")
-    skill = read_text_if_exists(selected_patch_dir / "skill_patch.md")
+    knowledge = _merge_body(root, selected_patch_dir / "knowledge_patch.md", None)
+    skill = _merge_body(root, selected_patch_dir / "skill_patch.md", None)
     agent_rules = read_text_if_exists(selected_patch_dir / "agent_rule_patch.md")
     registry_file = ensure_registry(root)
     registry_before = read_text_if_exists(registry_file)

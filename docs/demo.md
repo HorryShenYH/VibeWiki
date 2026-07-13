@@ -68,6 +68,24 @@ Change the HTTP client retry policy without reintroducing duplicate writes.
 The first path helps a developer remember. The second gives a coding agent the
 same project memory without another long prompt.
 
+## 5. Connect An AI Agent
+
+Install the approved-memory bridge:
+
+```bash
+vibewiki agent install
+```
+
+For Codex, register the local MCP server at the same time:
+
+```bash
+vibewiki agent install --register-codex
+```
+
+Start a new agent session in the repository. The agent can now call
+`vibewiki_brief`, `vibewiki_guard`, `vibewiki_search`, and `vibewiki_read`
+instead of asking you to paste the project's history again.
+
 ## CLI Equivalent
 
 The UI is the default, but every core operation remains scriptable:

@@ -5,6 +5,8 @@ import json
 import sys
 from pathlib import Path
 
+from .agent_install import format_agent_install_result, install_agent_bridge
+from .agent_memory import guard_agent_task
 from .capture import capture_session
 from .control_center import serve_control_center
 from .dashboard import generate_dashboard
@@ -15,6 +17,7 @@ from .import_markdown import import_markdown_session
 from .import_url import import_url_session
 from .merge import merge_patches
 from .memory_cards import cards_to_json, collect_memory_cards, format_memory_cards, search_memory_cards
+from .mcp_server import serve_mcp
 from .project import init_project
 from .project_understanding import (
     build_project_brief,
@@ -25,7 +28,13 @@ from .review import patch_summary, record_item_decision, review_patches
 from .review_board import generate_review_board
 from .review_plan import build_review_plan, format_review_plan_summary
 from .review_ui import serve_review_ui
-from .retrieval import answer_question, build_context_pack, format_search_results, search_memory
+from .retrieval import (
+    answer_question,
+    build_context_pack,
+    format_search_results,
+    load_retrieval_config,
+    search_memory,
+)
 from .setup_wizard import format_setup_result, run_setup_wizard
 from .validate import default_skill_path, validate_skill_file
 
@@ -237,6 +246,31 @@ def build_parser() -> argparse.ArgumentParser:
     ui.add_argument("--host", default="127.0.0.1", help="Host to bind. Defaults to 127.0.0.1.")
     ui.add_argument("--port", type=int, default=8765, help="Port to bind. Defaults to 8765.")
 
+    subparsers.add_parser(
+        "mcp",
+        help="Serve approved VibeWiki project memory over local stdio MCP.",
+    )
+
+    agent = subparsers.add_parser(
+        "agent",
+        help="Connect AI coding agents to VibeWiki project memory.",
+    )
+    agent_commands = agent.add_subparsers(dest="agent_command", required=True)
+    agent_install = agent_commands.add_parser(
+        "install",
+        help="Install project agent rules and an MCP connection descriptor.",
+    )
+    agent_install.add_argument(
+        "--name",
+        default="",
+        help="MCP server name. Defaults to vibewiki-<project>.",
+    )
+    agent_install.add_argument(
+        "--register-codex",
+        action="store_true",
+        help="Also register this project MCP server with the local Codex CLI.",
+    )
+
     dashboard = subparsers.add_parser(
         "dashboard",
         help="Generate a local HTML dashboard with VibeWiki memory charts.",
@@ -301,6 +335,13 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Disable embedding retrieval even if configured.",
     )
+
+    guard = subparsers.add_parser(
+        "guard",
+        help="Check an AI task against approved warnings, rules, and workflows.",
+    )
+    guard.add_argument("--for", dest="task", required=True, help="Task to check before editing.")
+    guard.add_argument("--max-items", type=int, default=6, help="Maximum memory constraints.")
 
     understand = subparsers.add_parser(
         "understand",
@@ -582,6 +623,31 @@ def run(args: argparse.Namespace) -> int:
         serve_control_center(project, host=args.host, port=args.port)
         return 0
 
+    if args.subcommand == "mcp":
+        serve_mcp(project)
+        return 0
+
+    if args.subcommand == "agent":
+        if args.agent_command != "install":
+            raise AssertionError(f"Unhandled agent command: {args.agent_command}")
+        result = install_agent_bridge(
+            project,
+            name=args.name,
+            register_codex=args.register_codex,
+        )
+        print(format_agent_install_result(result), end="")
+        append_event(
+            project,
+            "agent-install",
+            subject=result.server_name,
+            data={
+                "rules_changed": result.rules_changed,
+                "descriptor_changed": result.descriptor_changed,
+                "registration": result.registration,
+            },
+        )
+        return 0
+
     if args.subcommand == "dashboard":
         output = _path(args.output) if args.output else None
         dashboard_path = generate_dashboard(project, output=output, lang=args.lang)
@@ -663,10 +729,11 @@ def run(args: argparse.Namespace) -> int:
         return 0
 
     if args.subcommand == "context":
+        context_scope = args.scope or load_retrieval_config(project).agent_scope
         rendered = build_context_pack(
             project,
             args.query,
-            scope=args.scope,
+            scope=context_scope,
             max_items=args.max_items,
             max_chars_per_item=args.max_chars,
             output_format=args.format,
@@ -678,11 +745,22 @@ def run(args: argparse.Namespace) -> int:
             "context",
             subject=args.query,
             data={
-                "scope": args.scope or "",
+                "scope": context_scope,
                 "format": args.format,
                 "max_items": args.max_items or "",
                 "max_chars": args.max_chars or "",
             },
+        )
+        return 0
+
+    if args.subcommand == "guard":
+        payload = guard_agent_task(project, args.task, max_items=args.max_items)
+        print(json.dumps(payload, ensure_ascii=False, indent=2))
+        append_event(
+            project,
+            "guard",
+            subject=args.task,
+            data={"scope": "approved", "max_items": args.max_items},
         )
         return 0
 

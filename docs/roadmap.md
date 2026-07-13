@@ -15,6 +15,8 @@
 - composable skilllets, prompt patterns, and workflows
 - skill registry for exact slug/alias reuse and reviewed merge suggestions
 - local search, ask, and compact agent context packs
+- approved-first local MCP tools for brief, guard, search, and selective read
+- idempotent agent installer with shared `AGENTS.md` guidance
 - quick project understanding with `vibewiki understand`
 - optional OpenAI-compatible LLM and embedding APIs with local embedding cache
 

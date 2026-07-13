@@ -25,6 +25,9 @@ def build_doctor_report(project: Path) -> DoctorReport:
     latest_review = reviews[-1] if reviews else None
     approved = _has_approved_review(latest_review)
     project_brief = root / "docs" / "wiki" / "project_brief.md"
+    agent_descriptor = workspace / "agent.json"
+    agent_rules = "<!-- vibewiki-agent:start -->" in read_text_if_exists(root / "AGENTS.md")
+    agent_ready = agent_descriptor.exists() and agent_rules
 
     lines = [
         "VibeWiki Doctor",
@@ -35,6 +38,11 @@ def build_doctor_report(project: Path) -> DoctorReport:
         f"- config: {_status((workspace / 'config.yaml').exists())}",
         f"- events: {_status((workspace / 'events.jsonl').exists())}",
         f"- project brief: {_status(project_brief.exists())}",
+        "",
+        "Agent Bridge",
+        f"- MCP descriptor: {_status(agent_descriptor.exists())}",
+        f"- AGENTS.md integration: {_status(agent_rules)}",
+        f"- approved-first memory: {_status(agent_ready)}",
         "",
         "Memory",
         f"- sessions: {len(sessions)}",
@@ -59,7 +67,16 @@ def build_doctor_report(project: Path) -> DoctorReport:
         ]
     )
 
-    next_steps = _next_steps(root, workspace, project_brief, sessions, patches, latest_review, approved)
+    next_steps = _next_steps(
+        root,
+        workspace,
+        project_brief,
+        agent_ready,
+        sessions,
+        patches,
+        latest_review,
+        approved,
+    )
     lines.extend(["", "Suggested Next Step"])
     lines.extend(f"- {step}" for step in next_steps)
     return DoctorReport(ok=workspace.exists(), lines=lines, next_steps=next_steps)
@@ -73,6 +90,7 @@ def _next_steps(
     root: Path,
     workspace: Path,
     project_brief: Path,
+    agent_ready: bool,
     sessions: list[Path],
     patches: list[Path],
     latest_review: Path | None,
@@ -82,6 +100,8 @@ def _next_steps(
         return ["vibewiki init"]
     if not project_brief.exists():
         return ["vibewiki understand --output docs/wiki/project_brief.md"]
+    if not agent_ready:
+        return ["vibewiki agent install", "then register the printed MCP command with your agent"]
     if not sessions:
         return [
             "vibewiki capture --goal \"...\" --outcome \"...\"",

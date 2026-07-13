@@ -433,10 +433,10 @@ def _looks_actionable(title_lower: str, body_lower: str) -> bool:
 def _has_concrete_evidence(body: str) -> bool:
     concrete_patterns = [
         r"`[^`]+`",
-        r"\b[a-zA-Z0-9_./-]+\.(py|md|json|yaml|toml|sv|c|h|cpp)\b",
-        r"\b(max_abs_diff|rmse|bad_abs_gt|exit code|VENUS|VEMU|MATLAB|CloudRIC)\b",
+        r"\b[a-zA-Z0-9_./-]+\.(py|md|json|ya?ml|toml|js|jsx|ts|tsx|java|rs|go|sh|sql|sv|c|h|cpp)\b",
+        r"\b(max_abs_diff|rmse|error rate|accuracy|latency|throughput|benchmark|exit code|passed|failed)\b",
     ]
-    return any(re.search(pattern, body) for pattern in concrete_patterns)
+    return any(re.search(pattern, body, re.IGNORECASE) for pattern in concrete_patterns)
 
 
 def _normalize_kind(kind: str) -> str:

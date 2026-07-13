@@ -111,6 +111,11 @@ class VibeWikiFlowTest(unittest.TestCase):
             self.assertIn(root / "AGENTS.md", changed)
             self.assertTrue((root / "skills" / f"{session.session_id}.md").exists())
             self.assertTrue((root / "skills" / "skilllets" / "fix-simulator-mismatch.md").exists())
+            merged_skill = (root / "skills" / f"{session.session_id}.md").read_text(
+                encoding="utf-8"
+            )
+            self.assertIn("Status: approved", merged_skill)
+            self.assertIn("Recorded By:", merged_skill)
             self.assertIn(
                 "fix-simulator-mismatch",
                 (root / ".vibewiki" / "skill_registry.yaml").read_text(encoding="utf-8"),

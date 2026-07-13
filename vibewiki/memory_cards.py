@@ -6,7 +6,7 @@ import math
 import re
 from pathlib import Path
 
-from .events import read_events
+from .events import recorded_by_for_memory
 from .project import ensure_workspace
 from .text_utils import read_text_if_exists, slugify
 
@@ -73,8 +73,9 @@ def search_memory_cards(
     *,
     scope: str = "all",
     max_items: int = 8,
+    ensure: bool = True,
 ) -> list[MemoryCardResult]:
-    cards = collect_memory_cards(project, scope=scope)
+    cards = collect_memory_cards(project, scope=scope, ensure=ensure)
     if not cards:
         return []
     query_tokens = _tokens(query)
@@ -139,26 +140,14 @@ def format_card_answer(results: list[MemoryCardResult], *, root: Path, verbose: 
     confidence, reason = _confidence(cards)
     sources = _sources(cards, root)
     methods = _methods(cards)
-    ssh = _first_containing(methods, ["ssh ", "@"])
-    matlab = _first_containing(methods, ["matlab -batch", "run_vemu_gold"])
     result = _best_result(cards)
     claim = _first_known(card.claim for card in cards)
-
-    if ssh or matlab:
-        answer = f"用户 {actor} 曾经"
-        if ssh:
-            answer += f"通过 `{ssh}` 到远程 MATLAB/Windows worker"
-        else:
-            answer += "通过远程 MATLAB/Windows worker"
-        if matlab:
-            answer += f"，运行 `{matlab}`"
-        if result:
-            answer += f"，{_plain_result(result)}"
-        elif claim:
-            answer += f"，{_plain_result(claim)}"
-        answer += "。"
-    else:
-        answer = f"用户 {actor} 曾经记录：{_plain_result(claim or result)}。"
+    answer = f"用户 {actor} 曾经记录：{_plain_result(claim or result)}"
+    if methods:
+        answer += "；方法：" + "；".join(f"`{method}`" for method in methods[:3])
+    if result and _plain_result(result) != _plain_result(claim):
+        answer += f"；结果：{_plain_result(result)}"
+    answer += "。"
 
     lines = [
         f"结果：{answer}",
@@ -227,7 +216,7 @@ def _card_from_text(root: Path, path: Path, status: str, text: str) -> MemoryCar
     title = _first_heading(text) or path.stem.replace("-", " ").replace("_", " ").title()
     kind = _field(text, "Kind") or _field(text, "Type") or _kind_for_path(path, root)
     subject = _clean_subject(title)
-    actor = _recorded_by_for_source(root, path)
+    actor = recorded_by_for_memory(root, path)
     summary = _section(text, "Summary")
     purpose = _section(text, "Purpose")
     evidence = _section(text, "Evidence From Session")
@@ -264,9 +253,7 @@ def _extract_methods(text: str) -> list[str]:
         r"ssh\s+[A-Za-z0-9_.-]+@[A-Za-z0-9_.:-]+",
         r"scp\s+[A-Za-z0-9_./:@~$%{}\"'\\ -]+",
         r"matlab\s+-batch\s+\"[^\"]+\"",
-        r"TARGET_DAG=[A-Za-z0-9_./-]+",
-        r"VENUSROW=\d+",
-        r"VENUSLANE=\d+",
+        r"\b[A-Z][A-Z0-9_]{2,}=[A-Za-z0-9_./:@+-]+",
     ]
     for pattern in patterns:
         for match in re.findall(pattern, text):
@@ -282,12 +269,29 @@ def _looks_like_method_code(value: str) -> bool:
     lowered = clean.lower()
     if not clean or len(clean) > 180:
         return False
-    command_prefixes = ("ssh ", "scp ", "matlab ", "make ", "python ", "python3 ", "codex exec")
+    command_prefixes = (
+        "bash ",
+        "cargo ",
+        "cmake ",
+        "codex ",
+        "docker ",
+        "git ",
+        "go ",
+        "kubectl ",
+        "make ",
+        "matlab ",
+        "npm ",
+        "pnpm ",
+        "python ",
+        "python3 ",
+        "pytest ",
+        "scp ",
+        "sh ",
+        "ssh ",
+    )
     if lowered.startswith(command_prefixes):
         return True
-    if lowered.startswith(("target_dag=", "venusrow=", "venuslane=")):
-        return True
-    return "run_vemu_gold" in lowered
+    return bool(re.fullmatch(r"[A-Z][A-Z0-9_]{2,}=[^\s]+", clean))
 
 
 def _prune_methods(methods: list[str]) -> list[str]:
@@ -432,33 +436,6 @@ def _confidence(cards: list[MemoryCard]) -> tuple[str, str]:
     return "低", "只命中少量或未审核 memory card"
 
 
-def _recorded_by_for_source(root: Path, source: Path) -> str:
-    session_id = _session_id_for_source(root, source)
-    if not session_id:
-        return "unknown"
-    for event in reversed(read_events(root)):
-        if str(event.get("subject", "")) != session_id:
-            continue
-        if str(event.get("type", "")) in {"capture", "import-markdown", "import-url", "distill"}:
-            actor = str(event.get("actor", "")).strip()
-            if actor:
-                return actor
-    return "unknown"
-
-
-def _session_id_for_source(root: Path, source: Path) -> str:
-    relative = _relative(source, root)
-    parts = relative.parts
-    for marker in [(".vibewiki", "patches"), (".vibewiki", "sessions")]:
-        try:
-            index = parts.index(marker[0])
-        except ValueError:
-            continue
-        if len(parts) > index + 2 and parts[index + 1] == marker[1]:
-            return parts[index + 2]
-    return ""
-
-
 def _kind_for_path(path: Path, root: Path) -> str:
     relative = _relative(path, root).as_posix()
     if "/skilllets/" in relative:
@@ -576,12 +553,14 @@ def _best_result(cards: list[MemoryCard]) -> str:
     if not results:
         return ""
     preferred_markers = [
+        "passed",
+        "completed",
+        "verified",
+        "validated",
         "修通",
         "跑完",
         "artifacts",
         "拉回",
-        "MATLAB Agent",
-        "matlab -batch",
         "验证",
         "golden",
     ]
@@ -613,21 +592,6 @@ def _first_known(values: object) -> str:
     return "unknown"
 
 
-def _first_containing(values: list[str], markers: list[str]) -> str:
-    exact = []
-    for value in values:
-        lowered = value.lower()
-        if all(marker.lower() in lowered for marker in markers) and "<" not in value:
-            exact.append(value)
-    if exact:
-        return max(exact, key=_method_specificity)
-    for value in values:
-        lowered = value.lower()
-        if any(marker.lower() in lowered for marker in markers):
-            return value
-    return ""
-
-
 def _has_concrete_ssh(card: MemoryCard) -> bool:
     return any(
         method.startswith("ssh ")
@@ -640,17 +604,6 @@ def _has_concrete_ssh(card: MemoryCard) -> bool:
 
 def _has_placeholder_ssh(card: MemoryCard) -> bool:
     return any(method.startswith("ssh ") and "@" in method and "<" in method for method in card.method)
-
-
-def _method_specificity(value: str) -> int:
-    score = len(value)
-    host = _ssh_host(value)
-    if host:
-        if "." in host or ":" in host:
-            score += 100
-        if _short_numeric_ssh_host(value):
-            score -= 100
-    return score
 
 
 def _short_numeric_ssh_host(value: str) -> bool:

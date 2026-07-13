@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "project": "VibeWiki",
+  "default_scope": "approved",
+  "transport": "stdio",
+  "mcpServers": {
+    "vibewiki-vibewiki": {
+      "command": "vibewiki",
+      "args": [
+        "--project",
+        ".",
+        "mcp"
+      ]
+    }
+  },
+  "tools": [
+    "vibewiki_brief",
+    "vibewiki_guard",
+    "vibewiki_search",
+    "vibewiki_read"
+  ]
+}

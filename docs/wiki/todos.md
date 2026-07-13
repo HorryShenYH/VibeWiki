@@ -37,13 +37,13 @@ sessions.
 
 ## Medium Priority
 
-- Add a lightweight `vibewiki guard --for ...` command that reads approved
-  memory and the event ledger before an agent starts work, warning about known
-  failures, fragile files, or existing workflows.
 - Improve retrieval citations with better section anchors and source snippets.
 - Clean up stale embedding cache entries when source files change or disappear.
 - Add optional reranking for `search`, `ask`, and `context`.
-- Add `wiki_search` and `wiki_read` style machine-facing surfaces for agents.
+- Evaluate the new approved-first MCP brief/guard/search/read tools on several
+  real repositories and record recall quality, token cost, and repeated-work
+  reduction.
+- Add typed relationships and link traversal between related memory cards.
 - Add `export --format llms-full` for compact project context export.
 - Improve multilingual behavior beyond the review UI: bilingual section
   aliases, language-aware prompts, optional answer language control, and

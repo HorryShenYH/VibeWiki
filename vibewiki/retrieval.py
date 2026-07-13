@@ -11,7 +11,7 @@ from pathlib import Path
 from urllib.error import URLError
 from urllib.request import Request, urlopen
 
-from .events import read_events
+from .events import recorded_by_for_memory
 from .llm import chat_completion, clean_chat_response, llm_settings
 from .memory_cards import cards_payload, format_card_answer, search_memory_cards
 from .project import ensure_workspace
@@ -20,6 +20,7 @@ from .text_utils import read_text_if_exists, slugify
 
 DEFAULTS = {
     "retrieval.default_scope": "all",
+    "retrieval.agent_scope": "approved",
     "retrieval.search_max_items": "10",
     "retrieval.search_snippet_chars": "500",
     "retrieval.context_max_items": "8",
@@ -41,6 +42,7 @@ DEFAULTS = {
 @dataclass(frozen=True)
 class RetrievalConfig:
     default_scope: str
+    agent_scope: str
     search_max_items: int
     search_snippet_chars: int
     context_max_items: int
@@ -82,6 +84,7 @@ def load_retrieval_config(project: Path) -> RetrievalConfig:
     values = {**DEFAULTS, **_read_flat_config(project / ".vibewiki" / "config.yaml")}
     return RetrievalConfig(
         default_scope=_string(values, "retrieval.default_scope"),
+        agent_scope=_string(values, "retrieval.agent_scope"),
         search_max_items=_integer(values, "retrieval.search_max_items"),
         search_snippet_chars=_integer(values, "retrieval.search_snippet_chars"),
         context_max_items=_integer(values, "retrieval.context_max_items"),
@@ -108,9 +111,11 @@ def search_memory(
     max_items: int | None = None,
     snippet_chars: int | None = None,
     use_embeddings: bool = True,
+    ensure: bool = True,
 ) -> list[SearchResult]:
     root = project.resolve()
-    ensure_workspace(root)
+    if ensure:
+        ensure_workspace(root)
     config = load_retrieval_config(root)
     selected_scope = scope or config.default_scope
     limit = max_items or config.search_max_items
@@ -214,16 +219,18 @@ def build_context_pack(
     config = load_retrieval_config(root)
     limit = max_items or config.context_max_items
     item_chars = max_chars_per_item or config.context_max_chars_per_item
+    selected_scope = scope or config.agent_scope
     results = search_memory(
         root,
         query,
-        scope=scope,
+        scope=selected_scope,
         max_items=limit,
         snippet_chars=item_chars,
         use_embeddings=use_embeddings,
     )
     payload = {
         "query": query,
+        "scope": selected_scope,
         "budget": {"max_items": limit, "max_chars_per_item": item_chars},
         "items": [_context_item(result, root, item_chars) for result in results],
     }
@@ -276,7 +283,8 @@ def build_answer_draft(
             lines.extend(
                 [
                     f"{index}. [{chunk.status}] {chunk.kind}: {chunk.title}",
-                    f"   recorded_by: {_recorded_by_for_source(root, chunk.source)}",
+                    "   recorded_by: "
+                    + recorded_by_for_memory(root, chunk.source, section=chunk.section),
                     f"   source: {_relative(chunk.source, root)}",
                     f"   section: {chunk.section or 'Document'}",
                     f"   snippet: {result.snippet}",
@@ -408,7 +416,11 @@ def _llm_evidence(results: list[SearchResult], root: Path, *, max_chars: int) ->
                 "title": chunk.title,
                 "section": chunk.section,
                 "source": _relative(chunk.source, root).as_posix(),
-                "recorded_by": _recorded_by_for_source(root, chunk.source),
+                "recorded_by": recorded_by_for_memory(
+                    root,
+                    chunk.source,
+                    section=chunk.section,
+                ),
                 "snippet": text,
             }
         )
@@ -430,38 +442,14 @@ def _confidence_for_results(results: list[SearchResult]) -> tuple[str, str]:
 def _recorders_for_results(root: Path, results: list[SearchResult]) -> list[str]:
     recorders: list[str] = []
     for result in results:
-        recorder = _recorded_by_for_source(root, result.chunk.source)
+        recorder = recorded_by_for_memory(
+            root,
+            result.chunk.source,
+            section=result.chunk.section,
+        )
         if recorder != "unknown" and recorder not in recorders:
             recorders.append(recorder)
     return recorders
-
-
-def _recorded_by_for_source(root: Path, source: Path) -> str:
-    session_id = _session_id_for_source(root, source)
-    if not session_id:
-        return "unknown"
-    for event in reversed(read_events(root)):
-        if str(event.get("subject", "")) != session_id:
-            continue
-        event_type = str(event.get("type", ""))
-        if event_type in {"capture", "import-markdown", "import-url", "distill"}:
-            actor = str(event.get("actor", "")).strip()
-            if actor:
-                return actor
-    return "unknown"
-
-
-def _session_id_for_source(root: Path, source: Path) -> str:
-    relative = _relative(source, root)
-    parts = relative.parts
-    for marker in [(".vibewiki", "patches"), (".vibewiki", "sessions")]:
-        try:
-            index = parts.index(marker[0])
-        except ValueError:
-            continue
-        if len(parts) > index + 2 and parts[index + 1] == marker[1]:
-            return parts[index + 2]
-    return ""
 
 
 def _candidate_files(root: Path) -> list[Path]:
@@ -838,7 +826,7 @@ def _context_item(result: SearchResult, root: Path, max_chars: int) -> dict[str,
         "section": chunk.section,
         "score": round(result.score, 4),
         "source": _relative(chunk.source, root).as_posix(),
-        "recorded_by": _recorded_by_for_source(root, chunk.source),
+        "recorded_by": recorded_by_for_memory(root, chunk.source, section=chunk.section),
         "text": _truncate(chunk.text, max_chars),
     }
 

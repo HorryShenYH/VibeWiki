@@ -234,3 +234,33 @@ patch-level approval and runs `merge`.
 Verification:
 
 - `python3 -m unittest discover -s tests` passed with 20 tests.
+
+## 2026-07-13 Approved-First Agent Bridge
+
+The human control center is stable enough for regular use, so the next product
+milestone focuses on automatic AI access to reviewed project memory. VibeWiki
+now provides a dependency-free local stdio MCP server and an idempotent agent
+installer.
+
+The agent bridge exposes four read-only tools:
+
+- `vibewiki_brief`: compact project and memory map
+- `vibewiki_guard`: approved warnings, workflows, rules, and constraints
+- `vibewiki_search`: compact approved-memory retrieval
+- `vibewiki_read`: character-budgeted reads of selected memory refs
+
+Candidate memory is excluded by default and must be explicitly requested. Even
+then it is returned with an unreviewed warning. The read tool only accepts refs
+already indexed as VibeWiki memory and cannot act as an arbitrary project file
+reader. Clients without MCP can continue using approved-only JSON/YAML context
+packs.
+
+The core memory-card answer formatter was also generalized so SSH, MATLAB, and
+Venus environment details are treated as ordinary methods and assignments,
+instead of controlling a domain-specific answer template.
+
+Verification:
+
+- `python3 -m unittest discover -s tests -v` passed with 46 tests.
+- The registered MCP command started from `/tmp` and returned the approved
+  project brief over JSON-RPC.

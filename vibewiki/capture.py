@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+import getpass
 from pathlib import Path
 
 from .git_utils import changed_files, current_branch, git_diff, git_status, is_git_repo, recent_commit
@@ -24,11 +25,13 @@ def _metadata_yaml(
     branch: str,
     files: list[str],
     commit: str,
+    recorded_by: str,
 ) -> str:
     file_lines = "\n".join(f"  - {item}" for item in files) or "  []"
     commit_block = "\n".join(f"  {line}" for line in commit.splitlines()) or "  none"
     return f"""session_id: {session_id}
 created_at: {created_at}
+recorded_by: {recorded_by}
 project_root: {project}
 git_repo: {str(git_repo).lower()}
 branch: {branch}
@@ -161,6 +164,7 @@ def capture_session(
             branch=branch,
             files=files,
             commit=commit,
+            recorded_by=getpass.getuser(),
         ),
         encoding="utf-8",
     )
@@ -172,4 +176,3 @@ def capture_session(
         diff_patch=diff_patch,
         metadata_yaml=metadata_yaml,
     )
-
