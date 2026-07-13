@@ -3,6 +3,7 @@
 </p>
 
 <p align="center">
+  <a href="https://github.com/HorryShenYH/VibeWiki/stargazers"><img alt="GitHub stars" src="https://img.shields.io/github/stars/HorryShenYH/VibeWiki?style=flat&color=e9c46a"></a>
   <a href="https://github.com/HorryShenYH/VibeWiki/actions/workflows/tests.yml"><img alt="Tests" src="https://github.com/HorryShenYH/VibeWiki/actions/workflows/tests.yml/badge.svg"></a>
   <img alt="Python 3.10+" src="https://img.shields.io/badge/python-3.10%2B-457b9d">
   <img alt="License MIT" src="https://img.shields.io/badge/license-MIT-2a9d8f">
@@ -13,41 +14,66 @@
 # VibeWiki
 
 <p align="center">
-  <strong>Turn AI conversations into memory your next task can use.</strong>
+  <strong>Stop paying the AI amnesia tax.</strong>
 </p>
 
 <p align="center">
-  VibeWiki turns useful moments from Codex, Claude, ChatGPT, Cursor, and other
-  AI conversations into a reviewed personal or project knowledge base.
+  Your AI forgot. Your project should not.<br>
+  VibeWiki turns coding conversations into reviewed memory that you, your team,
+  and every future agent can reuse.
 </p>
 
-![VibeWiki dashboard showing memory status, review funnel, and card type charts](docs/assets/dashboard.png)
+<p align="center">
+  <strong>One command. One control center. No archaeology through old chats.</strong>
+</p>
 
-## The 30-Second Pitch
+![VibeWiki control center for importing, reviewing, and reusing AI conversations](docs/assets/control-center.png)
 
-Developers solve real problems with AI every day, but the useful context usually
-disappears inside long chat histories:
+<p align="center">
+  <strong>If AI tools should remember what a team has already learned, star
+  VibeWiki and help make that memory portable.</strong>
+</p>
 
-- the fix that finally worked
-- the reason behind an architecture decision
-- the command that made a release succeed
-- the constraint that invalidated an earlier approach
-- the unfinished idea worth revisiting next month
+## Start In One Command
 
-VibeWiki compiles those conversations into memory that stays useful:
-
-```text
-AI conversations + work evidence
--> candidate memory cards
--> quick human review
--> personal or project Wiki
--> answers for people + compact context for AI agents
+```bash
+git clone https://github.com/HorryShenYH/VibeWiki.git
+cd VibeWiki
+python3 -m pip install -e .
+vibewiki ui
 ```
 
-Use it alone to build a memory that follows you across projects, or keep one in
-a repository so a whole team and its AI agents can reuse what has already been
-learned. VibeWiki is not another coding agent. It is the shared memory behind
-the agents you already use.
+Open `http://127.0.0.1:8765/`. Paste a conversation, review the memory draft,
+then ask VibeWiki what your project already knows. The same page can import
+share links, capture results, distill sessions, review candidates, merge trusted
+memory, answer questions, and build compact AI context packs.
+
+For VS Code Remote SSH, forward port `8765` and open the same address locally.
+
+## The Memory Loop
+
+```text
+PASTE A CONVERSATION
+        ↓
+DISTILL WHAT MATTERS
+        ↓
+REVIEW BEFORE TRUST
+        ↓
+ASK IT LATER · GIVE IT TO ANY AGENT
+```
+
+Every useful fix, decision, command, warning, workflow, and unfinished idea gets
+a durable home without turning raw chat history into unquestioned truth.
+
+## Why Developers Care
+
+| Today | With VibeWiki |
+| --- | --- |
+| Search through old chat tabs | Ask one project memory |
+| Explain the same context to every agent | Generate a compact context pack |
+| Let knowledge disappear when a teammate leaves | Keep reviewed memory in the repository |
+| Trust opaque automatic memory | See the source, recorder, status, and confidence |
+| Spend tokens rediscovering old answers | Reuse what the team already paid to learn |
 
 ## Personal Memory And Project Memory
 
@@ -71,26 +97,6 @@ you can inspect where every memory came from.
 
 See [`docs/ecosystem.md`](docs/ecosystem.md) for the fuller ecosystem stance.
 
-## Three-Minute Demo
-
-```bash
-git clone https://github.com/HorryShenYH/VibeWiki.git
-cd VibeWiki
-python3 -m pip install -e .
-
-vibewiki setup
-vibewiki import-markdown examples/general/sample_session.md --session-name demo
-vibewiki distill
-vibewiki doctor
-vibewiki dashboard
-vibewiki review-board
-```
-
-Then open `.vibewiki/dashboard.html` for the memory dashboard, or the generated
-review board under `.vibewiki/patches/<session>/`.
-
-For the full walkthrough, see [`docs/demo.md`](docs/demo.md).
-
 ## What You Get After One Session
 
 | Output | Human value | Agent value |
@@ -101,11 +107,20 @@ For the full walkthrough, see [`docs/demo.md`](docs/demo.md).
 | Skilllets and workflows | reusable team procedures | composable task instructions |
 | Context packs | share just enough background | JSON/YAML input for coding agents |
 
-`vibewiki setup` is the recommended first-run experience. It asks whether you
-want a project Wiki or personal Wiki, where to store it, and whether to generate
-a first project brief with the built-in local understanding pass.
+`vibewiki ui` is the recommended first-run experience. It initializes missing
+local memory folders automatically. Use `vibewiki setup` only when you want the
+guided personal/project Wiki setup or an initial project brief.
 
-The first version is intentionally local and conservative:
+The control center is the primary interface:
+
+- paste a conversation or import a shared link
+- generate and review candidate memory
+- ask questions or build context for the next AI agent
+
+<details>
+<summary>CLI commands for scripts and automation</summary>
+
+- `vibewiki ui` opens the complete control center.
 
 - `vibewiki init` creates the project memory folders.
 - `vibewiki setup` runs the first-time project/personal Wiki setup wizard.
@@ -127,6 +142,8 @@ The first version is intentionally local and conservative:
 - `vibewiki context` emits compact YAML/JSON context packs for AI agents.
 - `vibewiki search` inspects the retrieved evidence directly.
 - `vibewiki understand` generates a quick local project-understanding brief.
+
+</details>
 
 VibeWiki does not directly mutate your main knowledge base before review. Facts
 start as candidates, uncertain claims stay marked, and missing context becomes
@@ -187,58 +204,19 @@ AI conversations are useful in the moment, but poor as long-term memory:
 
 VibeWiki gives those lessons a durable, searchable, and reviewable home.
 
-## Install From Source
+## CLI Automation
 
-```bash
-cd /path/to/VibeWiki
-python3 -m pip install -e .
-```
-
-You can also run it directly while developing:
-
-```bash
-python3 -m vibewiki.cli --help
-```
-
-## Quick Start
-
-In any project you want to give memory:
-
-```bash
-vibewiki setup
-vibewiki capture --goal "Fix duplicate API requests after timeouts" \
-  --outcome "Retries are now safe for idempotent requests" \
-  --command "python3 -m pytest tests/test_retry_policy.py -q" \
-  --tests "retry policy tests passed"
-vibewiki distill
-vibewiki dashboard
-vibewiki review-board
-vibewiki validate-skill
-vibewiki review --approve
-vibewiki merge
-```
-
-Or import a saved AI session:
+The UI is the default. The CLI exposes the same memory lifecycle for scripts,
+CI, and agent integrations:
 
 ```bash
 vibewiki import-markdown ./codex-session.md
 vibewiki distill
-vibewiki dashboard
-vibewiki review-board
-vibewiki validate-skill
 vibewiki review --approve
 vibewiki merge
-```
 
-Or import a shared ChatGPT conversation link:
-
-```bash
-vibewiki import-url "https://chatgpt.com/share/..."
-vibewiki distill
-vibewiki dashboard
-vibewiki review-board
-vibewiki review --approve
-vibewiki merge
+vibewiki ask "How did we solve the auth timeout?"
+vibewiki context --for "update the auth client" --format json
 ```
 
 `import-url` keeps both a readable `raw_session.md` and the original

@@ -19,7 +19,9 @@ dist/
 .vibewiki/sessions/
 .vibewiki/patches/
 .vibewiki/reviews/
+.vibewiki/inbox/
 .vibewiki/cache/
+.vibewiki/events.jsonl
 .vibewiki/dashboard.html
 .vibewiki/dashboard.png
 

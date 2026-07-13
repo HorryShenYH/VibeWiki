@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 import html
 from http.server import BaseHTTPRequestHandler
 from pathlib import Path
@@ -38,6 +39,13 @@ TRANSLATION_TARGET_LABELS_ZH = {
 }
 
 
+@dataclass(frozen=True)
+class ReviewActionResult:
+    message: str
+    message_zh: str
+    target_language: str = "zh"
+
+
 def render_review_ui(
     project: Path,
     *,
@@ -45,6 +53,8 @@ def render_review_ui(
     target_language: str = "zh",
     message: str = "",
     message_zh: str = "",
+    home_url: str = "",
+    default_lang: str = "zh",
 ) -> str:
     root = project.resolve()
     ensure_workspace(root)
@@ -76,9 +86,16 @@ def render_review_ui(
         if _plan_group(item) == "review_now"
         and not isinstance(item.get("decision"), ItemDecision)
     )
+    clean_default_lang = default_lang if default_lang in {"en", "zh"} else "zh"
+    home_link = (
+        f'<a class="home-link" href="{_escape(home_url)}">'
+        f'{_i18n("Back to Control Center", "返回中控台")}</a>'
+        if home_url
+        else ""
+    )
 
     return f"""<!doctype html>
-<html lang="zh" data-default-lang="zh">
+<html lang="{_escape(clean_default_lang)}" data-default-lang="{_escape(clean_default_lang)}">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -123,6 +140,8 @@ def render_review_ui(
     h3 {{ font-size: 16px; }}
     .sub {{ color: var(--muted); margin-top: 6px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; }}
     .top-actions {{ display: grid; gap: 10px; justify-items: end; }}
+    .home-link {{ color: var(--teal); font-size: 13px; font-weight: 700; text-decoration: none; }}
+    .home-link:hover {{ text-decoration: underline; }}
     .language-switch {{
       display: inline-flex;
       border: 1px solid var(--line);
@@ -425,19 +444,22 @@ def render_review_ui(
   <main>
     <header>
       <div>
+        {home_link}
         <h1>{_i18n("VibeWiki Review", "VibeWiki 审核")}</h1>
         <div class="sub">{_escape(session_id)}</div>
       </div>
       <div class="top-actions">
         <div class="language-switch" aria-label="Language">
-          <button type="button" data-lang-choice="zh" aria-pressed="true">中文</button>
-          <button type="button" data-lang-choice="en" aria-pressed="false">English</button>
+          <button type="button" data-lang-choice="en" aria-pressed="{_escape(str(clean_default_lang == 'en').lower())}">English</button>
+          <button type="button" data-lang-choice="zh" aria-pressed="{_escape(str(clean_default_lang == 'zh').lower())}">中文</button>
         </div>
         <div class="patch-actions">
           <form method="post" action="/patch-review">
+            <input type="hidden" name="patch" value="{_escape(session_id)}">
             <button class="primary" type="submit">{_i18n("Approve Patch", "批准整包")}</button>
           </form>
           <form method="post" action="/merge">
+            <input type="hidden" name="patch" value="{_escape(session_id)}">
             <button class="merge" type="submit">{_i18n("Merge Submitted", "合并已提交")}</button>
           </form>
         </div>
@@ -495,7 +517,7 @@ def render_review_ui(
           <span id="visible-count" class="count">{_escape(str(default_visible))} / {_escape(str(len(items)))}</span>
         </div>
         <section class="stack">
-        {''.join(_item_card(item) for item in items)}
+        {''.join(_item_card(item, session_id=session_id) for item in items)}
         </section>
       </section>
     </section>
@@ -573,6 +595,126 @@ def render_review_ui(
 """
 
 
+def perform_review_action(
+    project: Path,
+    *,
+    patch_dir: Path,
+    path: str,
+    data: dict[str, list[str]],
+) -> ReviewActionResult:
+    root = project.resolve()
+    selected_patch_dir = patch_dir.resolve()
+
+    if path == "/item-action":
+        item = _form_value(data, "item")
+        action = _form_value(data, "action")
+        body = _form_text(data, "body")
+        instruction = _form_value(data, "instruction")
+        target_language = _normalize_target_language(
+            _form_value(data, "target_language") or "zh"
+        )
+        if action == "save":
+            update_item_body(root, patch_dir=selected_patch_dir, item=item, body=body)
+            return ReviewActionResult(f"Saved Markdown for {item}", f"已保存 {item} 的 Markdown")
+        if action == "approve":
+            update_item_body(root, patch_dir=selected_patch_dir, item=item, body=body)
+            record_item_decision(
+                root,
+                patch_dir=selected_patch_dir,
+                item=item,
+                decision="approve",
+                note="Submitted from simplified review UI.",
+            )
+            return ReviewActionResult(f"Submitted {item}", f"已提交 {item}")
+        if action == "reject":
+            record_item_decision(
+                root,
+                patch_dir=selected_patch_dir,
+                item=item,
+                decision="reject",
+                note=instruction or "Rejected from simplified review UI.",
+            )
+            return ReviewActionResult(f"Discarded {item}", f"已标记不提交 {item}")
+        if action == "revise":
+            if not instruction:
+                raise ValueError("Revision instruction is required.")
+            revised = revise_candidate_markdown(root, body=body, instruction=instruction)
+            update_item_body(root, patch_dir=selected_patch_dir, item=item, body=revised)
+            return ReviewActionResult(f"Revised {item} with LLM", f"LLM 已修订 {item}")
+        if action == "translate":
+            translate_candidate_markdown(
+                root,
+                body=body,
+                target_language=target_language,
+            )
+            return ReviewActionResult(
+                f"Generated {language_label(target_language)} preview for {item}",
+                f"已生成 {item} 的 {_language_label_zh(target_language)} 预览",
+                target_language=target_language,
+            )
+        raise ValueError(f"Unknown item action: {action}")
+
+    if path == "/decision":
+        item = _form_value(data, "item")
+        decision = _form_value(data, "decision")
+        record_item_decision(
+            root,
+            patch_dir=selected_patch_dir,
+            item=item,
+            decision=decision,
+            target=_form_value(data, "target"),
+            title=_form_value(data, "title"),
+            summary=_form_value(data, "summary"),
+            tags=_form_value(data, "tags"),
+            note=_form_value(data, "note"),
+        )
+        return ReviewActionResult(
+            f"Recorded {decision} for {item}",
+            f"已记录 {item}：{decision}",
+        )
+
+    if path == "/bulk-decision":
+        items = _form_values(data, "item")
+        decision = _form_value(data, "decision")
+        if not items:
+            raise ValueError("No items selected.")
+        for item in items:
+            record_item_decision(
+                root,
+                patch_dir=selected_patch_dir,
+                item=item,
+                decision=decision,
+                note=_form_value(data, "note"),
+            )
+        return ReviewActionResult(
+            f"Recorded {decision} for {len(items)} items",
+            f"已为 {len(items)} 项记录：{decision}",
+        )
+
+    if path == "/save-item":
+        item = _form_value(data, "item")
+        update_item_body(
+            root,
+            patch_dir=selected_patch_dir,
+            item=item,
+            body=_form_text(data, "body"),
+        )
+        return ReviewActionResult(f"Saved Markdown for {item}", f"已保存 {item} 的 Markdown")
+
+    if path == "/patch-review":
+        review_patches(root, patch_dir=selected_patch_dir, approve=True)
+        return ReviewActionResult("Patch approved", "整包已批准")
+
+    if path == "/merge":
+        changed = merge_patches(root, patch_dir=selected_patch_dir)
+        return ReviewActionResult(
+            f"Merged {len(changed)} files",
+            f"已合并 {len(changed)} 个文件",
+        )
+
+    raise ValueError(f"Unknown review action: {path}")
+
+
 def serve_review_ui(
     project: Path,
     *,
@@ -610,115 +752,17 @@ def serve_review_ui(
             length = int(self.headers.get("Content-Length", "0") or 0)
             data = parse_qs(self.rfile.read(length).decode("utf-8"))
             try:
-                if self.path == "/item-action":
-                    item = _form_value(data, "item")
-                    action = _form_value(data, "action")
-                    body = _form_text(data, "body")
-                    instruction = _form_value(data, "instruction")
-                    target_language = _normalize_target_language(
-                        _form_value(data, "target_language") or "zh"
-                    )
-                    if action == "save":
-                        update_item_body(root, patch_dir=selected_patch_dir, item=item, body=body)
-                        self._redirect(f"Saved Markdown for {item}", f"已保存 {item} 的 Markdown")
-                        return
-                    if action == "approve":
-                        update_item_body(root, patch_dir=selected_patch_dir, item=item, body=body)
-                        record_item_decision(
-                            root,
-                            patch_dir=selected_patch_dir,
-                            item=item,
-                            decision="approve",
-                            note="Submitted from simplified review UI.",
-                        )
-                        self._redirect(f"Submitted {item}", f"已提交 {item}")
-                        return
-                    if action == "reject":
-                        record_item_decision(
-                            root,
-                            patch_dir=selected_patch_dir,
-                            item=item,
-                            decision="reject",
-                            note=instruction or "Rejected from simplified review UI.",
-                        )
-                        self._redirect(f"Discarded {item}", f"已标记不提交 {item}")
-                        return
-                    if action == "revise":
-                        if not instruction:
-                            raise ValueError("Revision instruction is required.")
-                        revised = revise_candidate_markdown(root, body=body, instruction=instruction)
-                        update_item_body(root, patch_dir=selected_patch_dir, item=item, body=revised)
-                        self._redirect(f"Revised {item} with LLM", f"LLM 已修订 {item}")
-                        return
-                    if action == "translate":
-                        translate_candidate_markdown(
-                            root,
-                            body=body,
-                            target_language=target_language,
-                        )
-                        self._redirect(
-                            f"Generated {language_label(target_language)} preview for {item}",
-                            f"已生成 {item} 的 {_language_label_zh(target_language)} 预览",
-                            target_language=target_language,
-                        )
-                        return
-                    raise ValueError(f"Unknown item action: {action}")
-                if self.path == "/decision":
-                    item = _form_value(data, "item")
-                    decision = _form_value(data, "decision")
-                    record_item_decision(
-                        root,
-                        patch_dir=selected_patch_dir,
-                        item=item,
-                        decision=decision,
-                        target=_form_value(data, "target"),
-                        title=_form_value(data, "title"),
-                        summary=_form_value(data, "summary"),
-                        tags=_form_value(data, "tags"),
-                        note=_form_value(data, "note"),
-                    )
-                    self._redirect(
-                        f"Recorded {decision} for {item}",
-                        f"已记录 {item}：{decision}",
-                    )
-                    return
-                if self.path == "/bulk-decision":
-                    items = _form_values(data, "item")
-                    decision = _form_value(data, "decision")
-                    if not items:
-                        raise ValueError("No items selected.")
-                    for item in items:
-                        record_item_decision(
-                            root,
-                            patch_dir=selected_patch_dir,
-                            item=item,
-                            decision=decision,
-                            note=_form_value(data, "note"),
-                        )
-                    self._redirect(
-                        f"Recorded {decision} for {len(items)} items",
-                        f"已为 {len(items)} 项记录：{decision}",
-                    )
-                    return
-                if self.path == "/save-item":
-                    item = _form_value(data, "item")
-                    update_item_body(
-                        root,
-                        patch_dir=selected_patch_dir,
-                        item=item,
-                        body=_form_text(data, "body"),
-                    )
-                    self._redirect(f"Saved Markdown for {item}", f"已保存 {item} 的 Markdown")
-                    return
-                if self.path == "/patch-review":
-                    review_patches(root, patch_dir=selected_patch_dir, approve=True)
-                    self._redirect("Patch approved", "整包已批准")
-                    return
-                if self.path == "/merge":
-                    changed = merge_patches(root, patch_dir=selected_patch_dir)
-                    self._redirect(f"Merged {len(changed)} files", f"已合并 {len(changed)} 个文件")
-                    return
-                self.send_error(404, "Unknown action")
+                result = perform_review_action(
+                    root,
+                    patch_dir=selected_patch_dir,
+                    path=self.path,
+                    data=data,
+                )
+                self._redirect(
+                    result.message,
+                    result.message_zh,
+                    target_language=result.target_language,
+                )
             except Exception as exc:
                 self._redirect(f"Error: {exc}", f"错误：{exc}")
 
@@ -830,7 +874,7 @@ def _plan_group_label(group: str) -> str:
     return _i18n(en, zh)
 
 
-def _item_card(item: dict[str, object]) -> str:
+def _item_card(item: dict[str, object], *, session_id: str = "") -> str:
     decision = item.get("decision")
     decision_text = decision.decision if isinstance(decision, ItemDecision) else "unreviewed"
     decision_class = "skip" if decision_text in {"reject", "defer"} else "decision"
@@ -879,6 +923,7 @@ def _item_card(item: dict[str, object]) -> str:
   <div class="preview">{preview_html}</div>
   {translation_html}
   <form class="controls" method="post" action="/item-action">
+    <input type="hidden" name="patch" value="{_escape(session_id)}">
     <input type="hidden" name="item" value="{_escape(item_id)}">
     <div class="simple-actions">
       <button class="primary" type="submit" name="action" value="approve">{_i18n("Submit", "提交")}</button>

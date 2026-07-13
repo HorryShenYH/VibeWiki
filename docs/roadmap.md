@@ -3,6 +3,7 @@
 ## v0.1: Local Trustworthy Memory
 
 - Python CLI
+- unified local Web control center for capture, distill, review, merge, ask, and context
 - local `.vibewiki` workspace
 - capture git diff and session notes
 - generate candidate patches

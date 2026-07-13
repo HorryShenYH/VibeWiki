@@ -11,6 +11,7 @@ from unittest.mock import patch
 
 from vibewiki.capture import capture_session
 from vibewiki.cli import build_parser, run as run_cli
+from vibewiki.control_center import perform_console_action, render_control_center
 from vibewiki.dashboard import generate_dashboard
 from vibewiki.distill import distill_session
 from vibewiki.events import read_events
@@ -66,6 +67,7 @@ class VibeWikiFlowTest(unittest.TestCase):
             self.assertTrue((root / ".vibewiki" / "skill_registry.yaml").exists())
             self.assertTrue((root / ".vibewiki" / "events.jsonl").exists())
             self.assertIn(".vibewiki/cache/", (root / ".gitignore").read_text(encoding="utf-8"))
+            self.assertIn(".vibewiki/inbox/", (root / ".gitignore").read_text(encoding="utf-8"))
             config_text = (root / ".vibewiki" / "config.yaml").read_text(encoding="utf-8")
             self.assertIn("scope: project", config_text)
             self.assertIn("mode: bilingual", config_text)
@@ -857,6 +859,53 @@ make emu_init
             code, _ = self.cli(root, "dashboard", "--output", str(zh_output), "--lang", "zh")
             self.assertEqual(code, 0)
             self.assertIn("VibeWiki 仪表盘", zh_output.read_text(encoding="utf-8"))
+
+    def test_control_center_imports_and_distills_a_pasted_conversation(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            init_project(root)
+
+            empty_html = render_control_center(root)
+            self.assertIn('data-vibewiki-control-center="1"', empty_html)
+            self.assertIn('action="/action/import-text"', empty_html)
+            self.assertIn('action="/action/ask"', empty_html)
+            self.assertIn("Memory Control Center", empty_html)
+
+            result = perform_console_action(
+                root,
+                path="/action/import-text",
+                data={
+                    "body": [
+                        """# Fix API Retry Policy
+
+## Final Outcome
+
+POST requests now require an idempotency key before retry.
+
+## Key Commands
+
+- python3 -m pytest tests/test_retry.py -q
+
+## Tests / Verification
+
+All retry regression tests passed.
+"""
+                    ],
+                    "session_name": ["api-retry"],
+                    "auto_distill": ["yes"],
+                },
+            )
+
+            self.assertIn("memory draft generated", result.message)
+            sessions = list((root / ".vibewiki" / "sessions").glob("*"))
+            patches = list((root / ".vibewiki" / "patches").glob("*"))
+            self.assertEqual(len(sessions), 1)
+            self.assertEqual(len(patches), 1)
+
+            populated_html = render_control_center(root)
+            self.assertIn("Fix API Retry Policy", populated_html)
+            self.assertIn(f'/review?patch={patches[0].name}', populated_html)
+            self.assertIn('name="patch"', render_review_ui(root, patch_dir=patches[0]))
 
     def test_review_plan_triages_raw_candidates(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

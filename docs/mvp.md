@@ -9,21 +9,21 @@ into reviewed, composable project memory.
 
 A developer uses an AI coding agent to fix a bug, ship a feature, investigate an
 incident, improve tooling, or explore a research idea. After the session, they
-run:
+open one control center:
 
 ```bash
-vibewiki capture
-vibewiki distill
-vibewiki validate-skill
-vibewiki review --approve
-vibewiki merge
+vibewiki ui
 ```
 
-If the session was already exported from Codex, Claude, Cursor, or another AI
-tool, they can start with:
+They paste or import the conversation, generate candidate memory, review it,
+merge trusted items, and ask the Wiki later from the same page. The equivalent
+CLI remains available for automation:
 
 ```bash
 vibewiki import-markdown path/to/session.md
+vibewiki distill
+vibewiki review --approve
+vibewiki merge
 ```
 
 The project receives approved findings, a Wiki note, reusable skilllets/prompt
@@ -31,6 +31,7 @@ patterns/workflows, a compatibility Skill draft, and updated agent guidance.
 
 ## v0.1 Commands
 
+- `vibewiki ui`: run the complete browser control center
 - `vibewiki init`: create local memory structure
 - `vibewiki capture`: save session notes, git diff, metadata
 - `vibewiki import-markdown`: preserve raw exported session Markdown and create

@@ -6,6 +6,7 @@ import sys
 from pathlib import Path
 
 from .capture import capture_session
+from .control_center import serve_control_center
 from .dashboard import generate_dashboard
 from .distill import distill_session
 from .doctor import build_doctor_report, format_doctor_report
@@ -49,7 +50,7 @@ def _prompt(label: str, current: str = "") -> str:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="vibewiki",
-        description="Turn AI coding sessions into reviewed project and personal memory.",
+        description="Turn AI conversations into reviewed personal and project memory.",
     )
     parser.add_argument(
         "--project",
@@ -228,6 +229,13 @@ def build_parser() -> argparse.ArgumentParser:
     review_ui.add_argument("--patch-dir", default=None, help="Specific patch directory to review.")
     review_ui.add_argument("--host", default="127.0.0.1", help="Host to bind. Defaults to 127.0.0.1.")
     review_ui.add_argument("--port", type=int, default=8765, help="Port to bind. Defaults to 8765.")
+
+    ui = subparsers.add_parser(
+        "ui",
+        help="Open the VibeWiki control center for the complete memory workflow.",
+    )
+    ui.add_argument("--host", default="127.0.0.1", help="Host to bind. Defaults to 127.0.0.1.")
+    ui.add_argument("--port", type=int, default=8765, help="Port to bind. Defaults to 8765.")
 
     dashboard = subparsers.add_parser(
         "dashboard",
@@ -568,6 +576,10 @@ def run(args: argparse.Namespace) -> int:
     if args.subcommand == "review-ui":
         patch_dir = _path(args.patch_dir) if args.patch_dir else None
         serve_review_ui(project, patch_dir=patch_dir, host=args.host, port=args.port)
+        return 0
+
+    if args.subcommand == "ui":
+        serve_control_center(project, host=args.host, port=args.port)
         return 0
 
     if args.subcommand == "dashboard":

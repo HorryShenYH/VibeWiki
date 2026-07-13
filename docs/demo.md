@@ -1,145 +1,81 @@
 # Demo
 
-This demo shows the smallest useful VibeWiki loop:
+The complete VibeWiki loop now lives in one browser control center:
 
 ```text
-bootstrap project memory -> import a session -> distill candidates -> review
+conversation -> memory draft -> review -> trusted memory -> reuse
 ```
 
-It uses only local files and does not require an LLM API.
+It works with local files and does not require an LLM API.
 
-## 1. Install
+## 1. Install And Open
 
 From the repository root:
 
 ```bash
 python3 -m pip install -e .
+vibewiki ui
 ```
 
-For local development without installation:
+Open `http://127.0.0.1:8765/`.
 
-```bash
-PYTHONPATH=. python3 -m vibewiki.cli --help
+For VS Code Remote SSH, forward port `8765` and open the same address in your
+local browser.
+
+## 2. Add A Conversation
+
+Choose one entry in the `Add a conversation` panel:
+
+- `Paste`: paste an exported AI conversation or Markdown notes
+- `Share link`: import a supported shared conversation URL
+- `Quick result`: record a goal, final outcome, commands, and verification
+
+Keep `Generate memory draft now` enabled for the shortest path.
+
+For a small domain-neutral example, use
+[`examples/general/sample_session.md`](../examples/general/sample_session.md).
+
+## 3. Review
+
+The new session appears in `Work queue`. Open `Review` to inspect the strongest
+candidate items first.
+
+For each candidate you can:
+
+- submit it
+- discard it
+- edit the Markdown
+- ask a configured LLM to revise it
+- generate a display-only translation preview
+
+Approve the patch when the useful candidates are ready, then return to the
+control center and merge it into trusted memory.
+
+## 4. Reuse
+
+Use `Ask your memory` for a human answer:
+
+```text
+How did we make API retries safe?
 ```
 
-## 2. Bootstrap A Project Brief
+Use `Build AI context` for a compact JSON package:
 
-Run the first-time setup wizard. Choose a project Wiki when prompted, then let
-VibeWiki generate a first project brief:
-
-```bash
-vibewiki setup
-vibewiki doctor
+```text
+Change the HTTP client retry policy without reintroducing duplicate writes.
 ```
 
-This produces a Markdown orientation page with:
+The first path helps a developer remember. The second gives a coding agent the
+same project memory without another long prompt.
 
-- repository shape
-- manifests
-- entrypoints
-- docs
-- tests
-- scripts
-- first files to read
-- suggested follow-ups
+## CLI Equivalent
 
-## 3. Import A Sample Coding Session
-
-Use the small, domain-neutral bug-fix example:
+The UI is the default, but every core operation remains scriptable:
 
 ```bash
 vibewiki import-markdown examples/general/sample_session.md --session-name demo
-```
-
-The imported session is stored under `.vibewiki/sessions/`. VibeWiki keeps the
-raw evidence and a normalized session record.
-
-## 4. Distill Candidate Memory
-
-```bash
 vibewiki distill
-```
-
-This writes candidate patches under `.vibewiki/patches/`, including:
-
-- knowledge patch
-- typed findings
-- skill patch
-- candidate skilllets
-- agent rule patch
-- clarifying questions
-
-Candidates are not merged into the main Wiki automatically.
-
-## 5. Visualize
-
-Generate the memory dashboard:
-
-```bash
-vibewiki dashboard
-```
-
-Open `.vibewiki/dashboard.html` to inspect memory status, review backlog, card
-types, recent activity, and the next suggested command.
-
-The dashboard defaults to English for demos and includes an in-page `EN / 中文`
-switch. To pre-render a Chinese-first file:
-
-```bash
-vibewiki dashboard --lang zh
-```
-
-## 6. Review
-
-Generate a local HTML board:
-
-```bash
-vibewiki doctor
-vibewiki review-board
-```
-
-Open the generated `review_board.html` under the latest patch directory. The
-board shows candidate memory, suggested commands, questions, and review actions.
-
-For an SSH-friendly browser workflow:
-
-```bash
-vibewiki review-ui --port 8765
-```
-
-Then open `http://127.0.0.1:8765/` after forwarding the port.
-
-## 7. Merge Approved Memory
-
-For the demo, approve and merge the latest patch:
-
-```bash
 vibewiki review --approve
 vibewiki merge
-```
-
-VibeWiki appends approved memory into `docs/wiki/`, `skills/`, and `AGENTS.md`.
-
-## 8. Reuse Memory
-
-Ask the local memory:
-
-```bash
 vibewiki ask "how did we make API retries safe?"
-vibewiki search "idempotent retry"
-vibewiki context --for "change the HTTP client retry policy" --format json
 ```
-
-`ask` is for humans. `context` is for AI agents.
-
-## What To Notice
-
-The demo is intentionally small. The point is the lifecycle:
-
-```text
-evidence -> candidate memory -> review -> durable memory -> reuse
-```
-
-VibeWiki is most valuable after real AI coding sessions, where the evidence
-contains commands, diffs, tests, caveats, and debugging decisions that would
-otherwise disappear into chat history.

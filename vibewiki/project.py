@@ -253,16 +253,18 @@ def ensure_workspace(project: Path) -> None:
 
 def _ensure_gitignore_cache(root: Path) -> bool:
     path = root / ".gitignore"
-    line = ".vibewiki/cache/"
+    required = (".vibewiki/cache/", ".vibewiki/inbox/")
     if path.exists():
         text = path.read_text(encoding="utf-8")
         entries = {item.strip() for item in text.splitlines()}
-        if line in entries:
+        missing = [line for line in required if line not in entries]
+        if not missing:
             return False
         suffix = "" if not text or text.endswith("\n") else "\n"
-        path.write_text(f"{text}{suffix}{line}\n", encoding="utf-8")
+        addition = "".join(f"{line}\n" for line in missing)
+        path.write_text(f"{text}{suffix}{addition}", encoding="utf-8")
         return True
-    path.write_text(f"{line}\n", encoding="utf-8")
+    path.write_text("".join(f"{line}\n" for line in required), encoding="utf-8")
     return True
 
 
