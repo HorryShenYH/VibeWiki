@@ -66,6 +66,7 @@ class VibeWikiFlowTest(unittest.TestCase):
             self.assertTrue((root / ".vibewiki" / "events.jsonl").exists())
             self.assertIn(".vibewiki/cache/", (root / ".gitignore").read_text(encoding="utf-8"))
             config_text = (root / ".vibewiki" / "config.yaml").read_text(encoding="utf-8")
+            self.assertIn("scope: project", config_text)
             self.assertIn("mode: bilingual", config_text)
             self.assertIn("primary: zh", config_text)
             self.assertIn("translation:", config_text)
@@ -154,6 +155,126 @@ We fixed a repeated simulator setup issue.
             self.assertEqual(code, 0)
             payload = json.loads(rendered_json)
             self.assertEqual(payload[-1]["type"], "distill")
+
+    def test_doctor_reports_next_step_without_mutating_workspace(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+
+            code, rendered = self.cli(root, "doctor")
+            self.assertEqual(code, 0)
+            self.assertIn("VibeWiki Doctor", rendered)
+            self.assertIn("vibewiki init", rendered)
+            self.assertFalse((root / ".vibewiki").exists())
+
+            code, _ = self.cli(root, "init")
+            self.assertEqual(code, 0)
+            code, rendered = self.cli(root, "doctor")
+            self.assertEqual(code, 0)
+            self.assertIn("project brief: missing", rendered)
+            self.assertIn("vibewiki understand --output docs/wiki/project_brief.md", rendered)
+
+    def test_setup_wizard_supports_project_and_personal_wikis(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            project_root = root / "project"
+            personal_root = root / "personal-wiki"
+            project_root.mkdir()
+            (project_root / "README.md").write_text("# Demo\n\nA setup target.\n", encoding="utf-8")
+
+            code, rendered = self.cli(
+                root,
+                "setup",
+                "--scope",
+                "project",
+                "--project-path",
+                str(project_root),
+                "--understand",
+            )
+            self.assertEqual(code, 0)
+            self.assertIn("scope: project", rendered)
+            self.assertTrue((project_root / ".vibewiki" / "config.yaml").exists())
+            self.assertTrue((project_root / "docs" / "wiki" / "project_brief.md").exists())
+            config_text = (project_root / ".vibewiki" / "config.yaml").read_text(encoding="utf-8")
+            self.assertIn("scope: project", config_text)
+            self.assertEqual(read_events(project_root)[-1]["type"], "setup")
+
+            code, rendered = self.cli(
+                root,
+                "setup",
+                "--scope",
+                "personal",
+                "--wiki-path",
+                str(personal_root),
+                "--no-understand",
+            )
+            self.assertEqual(code, 0)
+            self.assertIn("scope: personal", rendered)
+            self.assertTrue((personal_root / ".vibewiki" / "config.yaml").exists())
+            self.assertFalse((personal_root / "docs" / "wiki" / "project_brief.md").exists())
+            personal_config = (personal_root / ".vibewiki" / "config.yaml").read_text(
+                encoding="utf-8"
+            )
+            self.assertIn("scope: personal", personal_config)
+            self.assertIn(
+                "Personal Wiki",
+                (personal_root / "docs" / "wiki" / "index.md").read_text(encoding="utf-8"),
+            )
+
+    def test_understand_generates_project_brief(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "demo").mkdir()
+            (root / "tests").mkdir()
+            (root / "README.md").write_text(
+                """# Demo
+
+A compact project used to test quick repository understanding.
+""",
+                encoding="utf-8",
+            )
+            (root / "pyproject.toml").write_text(
+                """[project]
+name = "demo"
+
+[project.scripts]
+demo = "demo.cli:main"
+""",
+                encoding="utf-8",
+            )
+            (root / "demo" / "__init__.py").write_text("", encoding="utf-8")
+            (root / "demo" / "cli.py").write_text(
+                """class Runner:
+    pass
+
+def main():
+    return 0
+""",
+                encoding="utf-8",
+            )
+            (root / "tests" / "test_demo.py").write_text(
+                "def test_demo():\n    assert True\n",
+                encoding="utf-8",
+            )
+
+            code, rendered = self.cli(root, "understand")
+            self.assertEqual(code, 0)
+            self.assertIn("# Project Brief: ", rendered)
+            self.assertIn("README Signal", rendered)
+            self.assertIn("demo/cli.py", rendered)
+            self.assertIn("function `main`", rendered)
+
+            output = root / "docs" / "wiki" / "project_brief.md"
+            code, message = self.cli(root, "understand", "--output", str(output))
+            self.assertEqual(code, 0)
+            self.assertIn("Generated project brief", message)
+            self.assertIn("Project Brief", output.read_text(encoding="utf-8"))
+
+            code, rendered_json = self.cli(root, "understand", "--format", "json")
+            self.assertEqual(code, 0)
+            payload = json.loads(rendered_json)
+            self.assertIn("demo/cli.py", payload["entrypoints"])
+            self.assertTrue(any(item["name"] == "main" for item in payload["python_symbols"]))
+            self.assertEqual(read_events(root)[-1]["type"], "understand")
 
     def test_skill_validation_requires_sections(self) -> None:
         report = validate_skill_text(

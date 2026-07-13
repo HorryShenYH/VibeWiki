@@ -33,12 +33,42 @@ Its distinct traits are:
 
 - evidence-first memory with raw sessions, commands, tests, diffs, and sources
 - review-first promotion, where generated memory starts as candidate
+- bootstrap-first project orientation through a fast local understanding pass
+- dual project/personal memory: project Wikis keep local facts, while personal
+  Wikis keep cross-project habits, prompts, research notes, and reusable skills
 - findings-first classification into knowledge, issues, todos, ideas,
   research notes, and directions
 - skilllets, prompt patterns, and workflows instead of one skill per session
 - reusable memory through `search`, `ask`, and compact agent `context`
 
 ## High Priority Improvements
+
+### Bootstrap And Personal Knowledge Modes
+
+VibeWiki should support two ways to begin:
+
+- run `vibewiki understand` on an unfamiliar repository to generate a baseline
+  project brief and initial reading map
+- point VibeWiki at a personal knowledge folder to accumulate cross-project
+  prompts, instincts, research notes, and workflows
+
+Implemented:
+
+- `vibewiki understand` scans local files and emits Markdown or JSON project
+  briefs without extra dependencies
+- `docs/wiki/project_brief.md` can serve as the first Wiki page for a new
+  project
+
+Needed improvements:
+
+- add `memory.scope: project|personal` to configuration and candidate metadata
+- add commands or docs for promoting repeated project lessons into personal
+  memory
+- let bootstrap run project-specific build/test skills and record the results as
+  reviewed baseline evidence
+- create starter templates for personal Wikis, including prompts, workflows,
+  research notes, and reusable skilllets
+- make `context` able to combine project memory with an optional personal Wiki
 
 ### Self-Hosted Demo
 

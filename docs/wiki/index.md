@@ -6,6 +6,7 @@ sessions.
 ## Pages
 
 - [Development Notes](development_notes.md)
+- [Project Brief](project_brief.md)
 - [Knowledge](knowledge.md)
 - [Known Issues](known_issues.md)
 - [Todos](todos.md)

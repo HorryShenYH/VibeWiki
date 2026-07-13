@@ -7,17 +7,24 @@ from pathlib import Path
 
 from .capture import capture_session
 from .distill import distill_session
+from .doctor import build_doctor_report, format_doctor_report
 from .events import append_event, format_events, read_events
 from .import_markdown import import_markdown_session
 from .import_url import import_url_session
 from .merge import merge_patches
 from .memory_cards import cards_to_json, collect_memory_cards, format_memory_cards, search_memory_cards
 from .project import init_project
+from .project_understanding import (
+    build_project_brief,
+    project_brief_to_json,
+    render_project_brief_markdown,
+)
 from .review import patch_summary, record_item_decision, review_patches
 from .review_board import generate_review_board
 from .review_plan import build_review_plan, format_review_plan_summary
 from .review_ui import serve_review_ui
 from .retrieval import answer_question, build_context_pack, format_search_results, search_memory
+from .setup_wizard import format_setup_result, run_setup_wizard
 from .validate import default_skill_path, validate_skill_file
 
 
@@ -41,7 +48,7 @@ def _prompt(label: str, current: str = "") -> str:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="vibewiki",
-        description="Turn AI coding sessions into reviewed project memory.",
+        description="Turn AI coding sessions into reviewed project and personal memory.",
     )
     parser.add_argument(
         "--project",
@@ -52,6 +59,33 @@ def build_parser() -> argparse.ArgumentParser:
 
     init = subparsers.add_parser("init", help="Create VibeWiki memory structure.")
     init.add_argument("--force", action="store_true", help="Overwrite existing seed files.")
+    init.add_argument(
+        "--scope",
+        choices=["project", "personal"],
+        default="project",
+        help="Memory scope to initialize. Defaults to project.",
+    )
+
+    setup = subparsers.add_parser("setup", help="Run the first-time VibeWiki setup wizard.")
+    setup.add_argument("--scope", choices=["project", "personal"], default="")
+    setup.add_argument("--wiki-path", default=None, help="Personal Wiki folder.")
+    setup.add_argument("--project-path", default=None, help="Project folder.")
+    setup.add_argument(
+        "--understand",
+        dest="understand",
+        action="store_true",
+        default=None,
+        help="Generate a first project brief during setup.",
+    )
+    setup.add_argument(
+        "--no-understand",
+        dest="understand",
+        action="store_false",
+        help="Skip project brief generation during setup.",
+    )
+    setup.add_argument("--force", action="store_true", help="Overwrite existing seed files.")
+
+    subparsers.add_parser("doctor", help="Inspect workspace state and suggest the next command.")
 
     capture = subparsers.add_parser("capture", help="Capture one coding session.")
     capture.add_argument("--session-name", default=None, help="Short name used in the session id.")
@@ -252,6 +286,20 @@ def build_parser() -> argparse.ArgumentParser:
         help="Disable embedding retrieval even if configured.",
     )
 
+    understand = subparsers.add_parser(
+        "understand",
+        help="Generate a quick project-understanding brief from local files.",
+    )
+    understand.add_argument(
+        "--target",
+        default=None,
+        help="Repository or folder to scan. Defaults to --project.",
+    )
+    understand.add_argument("--output", default=None, help="File to write instead of printing.")
+    understand.add_argument("--format", choices=["md", "json"], default="md")
+    understand.add_argument("--max-files", type=int, default=400, help="Maximum files to scan.")
+    understand.add_argument("--max-depth", type=int, default=5, help="Maximum relative path depth.")
+
     cards = subparsers.add_parser("cards", help="Show compact VibeWiki memory cards.")
     cards.add_argument("query", nargs="?", default="", help="Optional card search query.")
     cards.add_argument("--scope", choices=["approved", "candidate", "all"], default="all")
@@ -272,12 +320,12 @@ def run(args: argparse.Namespace) -> int:
     project = _path(args.project)
 
     if args.subcommand == "init":
-        created = init_project(project, force=args.force)
+        created = init_project(project, force=args.force, scope=args.scope)
         append_event(
             project,
             "init",
             subject=project.name,
-            data={"created": [str(path) for path in created], "force": args.force},
+            data={"created": [str(path) for path in created], "force": args.force, "scope": args.scope},
         )
         if created:
             print("Created or refreshed:")
@@ -285,6 +333,30 @@ def run(args: argparse.Namespace) -> int:
                 print(f"- {path}")
         else:
             print("VibeWiki workspace already exists. Use --force to refresh seed files.")
+        return 0
+
+    if args.subcommand == "setup":
+        selected_project = _path(args.project_path) if args.project_path else None
+        selected_wiki = _path(args.wiki_path) if args.wiki_path else None
+        result = run_setup_wizard(
+            default_project=project,
+            scope=args.scope,
+            wiki_path=selected_wiki,
+            project_path=selected_project,
+            understand=args.understand,
+            force=args.force,
+        )
+        print(format_setup_result(result), end="")
+        append_event(
+            result.root,
+            "setup",
+            subject=result.root.name,
+            data={
+                "scope": result.scope,
+                "project_brief": str(result.project_brief or ""),
+                "created": [str(path) for path in result.created],
+            },
+        )
         return 0
 
     if args.subcommand == "capture":
@@ -318,6 +390,11 @@ def run(args: argparse.Namespace) -> int:
             subject=paths.session_id,
             data={"goal": goal, "outcome": outcome, "session_dir": str(paths.session_dir)},
         )
+        return 0
+
+    if args.subcommand == "doctor":
+        report = build_doctor_report(project)
+        print(format_doctor_report(report), end="")
         return 0
 
     if args.subcommand == "distill":
@@ -579,6 +656,38 @@ def run(args: argparse.Namespace) -> int:
                 "format": args.format,
                 "max_items": args.max_items or "",
                 "max_chars": args.max_chars or "",
+            },
+        )
+        return 0
+
+    if args.subcommand == "understand":
+        target = _path(args.target) if args.target else project
+        brief = build_project_brief(
+            target,
+            max_files=args.max_files,
+            max_depth=args.max_depth,
+        )
+        rendered = (
+            project_brief_to_json(brief)
+            if args.format == "json"
+            else render_project_brief_markdown(brief)
+        )
+        output = _path(args.output) if args.output else None
+        if output:
+            output.parent.mkdir(parents=True, exist_ok=True)
+            output.write_text(rendered, encoding="utf-8")
+            print(f"Generated project brief: {output}")
+        else:
+            print(rendered, end="" if rendered.endswith("\n") else "\n")
+        append_event(
+            project,
+            "understand",
+            subject=target.name,
+            data={
+                "target": str(target),
+                "output": str(output or ""),
+                "format": args.format,
+                "files_scanned": brief.files_scanned,
             },
         )
         return 0

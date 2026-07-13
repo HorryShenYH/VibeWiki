@@ -14,9 +14,22 @@
 - composable skilllets, prompt patterns, and workflows
 - skill registry for exact slug/alias reuse and reviewed merge suggestions
 - local search, ask, and compact agent context packs
+- quick project understanding with `vibewiki understand`
 - optional OpenAI-compatible LLM and embedding APIs with local embedding cache
 
-## v0.2: GitHub Pull Request Workflow
+## v0.2: Bootstrap And Personal Memory
+
+- explicit project vs personal Wiki positioning
+- `vibewiki understand --output docs/wiki/project_brief.md` as the standard
+  bootstrap step for a new repository
+- project brief sections for first files to read, commands, docs, tests, and
+  missing follow-ups
+- personal VibeWiki workflow for cross-project prompts, instincts, research
+  notes, and reusable skilllets
+- import/capture flow that can target either a project Wiki or a personal Wiki
+- promotion guidance for moving repeated project lessons into personal memory
+
+## v0.3: GitHub Pull Request Workflow
 
 - `/vibewiki distill` PR comment
 - read PR diff and description
@@ -24,7 +37,7 @@
 - maintainer approval before docs update
 - validate links, source references, unresolved questions, and evidence status
 
-## v0.3: Skilllet Evolution System
+## v0.4: Skilllet Evolution System
 
 - Skilllet patch format
 - Skilllet versioning
@@ -36,7 +49,7 @@
 - `When Not To Use`, probes, evidence, confidence, and environment requirements
 - skilllet evolution log
 
-## v0.4: Venus Case Study
+## v0.5: Venus Case Study
 
 - VEMU simulation skilllets
 - VEMU output mismatch skilllets
@@ -47,7 +60,7 @@
 - workflows that compose the smaller units into full verification runs
 - verifier-style probes for DSL build, Emulator run, dump comparison, and generated assembly markers
 
-## v0.5: Advanced Ask And Retrieval
+## v0.6: Advanced Ask And Retrieval
 
 - richer local Markdown retrieval
 - cited answers with source sections

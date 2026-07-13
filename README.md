@@ -1,23 +1,73 @@
 # VibeWiki
 
-Turn AI coding sessions into reviewed project memory.
+The reviewed memory layer for AI coding agents.
 
 > Stop solving the same bug twice.
 
-AI coding is fast, but the useful knowledge often disappears into chat logs,
-temporary commands, diffs, and test output. VibeWiki captures what actually
-worked, turns it into reviewable findings, Wiki patches, composable skilllets,
-prompt patterns, workflows, and Agent Rule patches, then feeds that knowledge
-back into future development.
+Use Codex, Claude Code, Cline, Aider, OpenHands, Cursor, or Copilot to code.
+Use Repomix, Gitingest, DeepWiki-style tools, or repo maps to understand a
+repository. Use VibeWiki to remember what actually worked.
 
-In plain words: VibeWiki is a memory layer for AI coding. After Codex, Claude, or
-Cursor helps you fix something, VibeWiki turns the messy conversation into
-durable memory: facts, issues, todos, ideas, research notes, directions, and
-small reusable capability units.
+AI coding is fast, but the useful knowledge often disappears into chat logs,
+temporary commands, diffs, and test output. VibeWiki turns those traces into
+reviewable findings, Wiki patches, composable skilllets, prompt patterns,
+workflows, and agent rules, then feeds them back into future development.
+
+In plain words: VibeWiki is a project and personal memory compiler for AI
+coding. It can bootstrap a new project Wiki by quickly understanding the
+repository, then grow that Wiki from real vibe-coding conversations.
+
+## Why VibeWiki?
+
+Most AI coding tools are great at doing the next task. VibeWiki focuses on what
+happens after the task succeeds:
+
+```text
+conversation + commands + diff + tests + notes
+-> candidate memory
+-> human review
+-> project/personal Wiki + skills + workflows + agent rules
+```
+
+VibeWiki does not replace the tools around it. It is designed to build on them:
+
+| Tool family | Best at | VibeWiki adds |
+| --- | --- | --- |
+| Repomix / Gitingest | packing repo context for LLMs | reviewed memory after coding |
+| DeepWiki / RepoAgent / CodeWiki-style tools | generating repo understanding | evidence-backed updates from real sessions |
+| Codex / Claude Code / Cline / Aider / OpenHands | doing coding work | preserving what worked and why |
+| Anthropic Skills / AGENTS.md / Cursor rules | executable agent instructions | generating and evolving instructions from evidence |
+| Obsidian / GitHub Wiki / Markdown docs | storing notes | compiling notes from AI collaboration |
+
+See [`docs/ecosystem.md`](docs/ecosystem.md) for the fuller ecosystem stance.
+
+## Three-Minute Demo
+
+```bash
+git clone https://github.com/<your-org>/VibeWiki.git
+cd VibeWiki
+python3 -m pip install -e .
+
+vibewiki setup
+vibewiki import-markdown examples/venus/sample_session.md --session-name demo
+vibewiki distill
+vibewiki doctor
+vibewiki review-board
+```
+
+Then open the generated review board under `.vibewiki/patches/<session>/`.
+
+For the full walkthrough, see [`docs/demo.md`](docs/demo.md).
+
+`vibewiki setup` is the recommended first-run experience. It asks whether you
+want a project Wiki or personal Wiki, where to store it, and whether to generate
+a first project brief with the built-in local understanding pass.
 
 The first version is intentionally local and conservative:
 
 - `vibewiki init` creates the project memory folders.
+- `vibewiki setup` runs the first-time project/personal Wiki setup wizard.
+- `vibewiki doctor` inspects workspace state and suggests the next command.
 - `vibewiki capture` records one coding session, including git diff and notes.
 - `vibewiki import-markdown` imports an exported Codex, Claude, or Cursor session.
 - `vibewiki import-url` imports a shared conversation URL, including ChatGPT share links.
@@ -33,6 +83,7 @@ The first version is intentionally local and conservative:
 - `vibewiki ask` answers human questions from approved and candidate memory.
 - `vibewiki context` emits compact YAML/JSON context packs for AI agents.
 - `vibewiki search` inspects the retrieved evidence directly.
+- `vibewiki understand` generates a quick local project-understanding brief.
 
 VibeWiki does not directly mutate your main knowledge base before review. Facts
 start as candidates, uncertain claims stay marked, and missing context becomes
@@ -50,6 +101,13 @@ language:
 ```
 
 ## What It Does
+
+VibeWiki has two complementary jobs:
+
+- bootstrap memory: scan a project, identify the first files to read, and write
+  a baseline project brief before any deep work starts
+- grow memory: capture vibe-coding conversations, distill what was learned, and
+  merge reviewed knowledge and skills back into the Wiki
 
 VibeWiki treats a finished AI conversation as evidence, not as a skill by
 itself. One conversation may contain several useful ideas; several conversations
@@ -104,7 +162,7 @@ python3 -m vibewiki.cli --help
 In any project you want to give memory:
 
 ```bash
-vibewiki init
+vibewiki setup
 vibewiki capture --goal "Fix simulator mismatch" \
   --outcome "Aligned VEMU output with the reference trace" \
   --command "make run-vemu" \
@@ -172,6 +230,32 @@ Use strict validation when you want warnings to block promotion:
 
 ```bash
 vibewiki validate-skill --strict
+```
+
+For onboarding yourself or a new AI agent to an unfamiliar repository, ask
+VibeWiki for a local project brief:
+
+```bash
+vibewiki understand --output docs/wiki/project_brief.md
+vibewiki understand --format json
+```
+
+The brief is deliberately dependency-free. It scans local text files, manifests,
+entrypoints, docs, tests, scripts, Python symbols, and internal imports, then
+suggests the first files to read. This is the built-in lightweight path; heavier
+repo-understanding systems such as RepoGraph-style repository maps or
+CodeWiki-style generated architecture docs can be layered on later.
+
+For a personal knowledge base, point `--project` at a personal VibeWiki folder
+and import conversations, notes, or reusable workflows there. Project Wikis hold
+local facts and commands; personal Wikis hold cross-project habits, prompts,
+research notes, and skills that should follow you.
+
+For scripted setup, use:
+
+```bash
+vibewiki setup --scope project --project-path /path/to/repo --understand
+vibewiki setup --scope personal --wiki-path ~/VibeWikiPersonal --no-understand
 ```
 
 `import-markdown` and `import-url` preserve the full original evidence, then
@@ -375,11 +459,14 @@ export VIBEWIKI_TRANSLATION_PROVIDER="llm"
 ## Roadmap
 
 - `v0.1`: local CLI and reviewable memory patch workflow
-- `v0.2`: GitHub PR comment workflow
-- `v0.3`: Skilllet versioning, deprecation, and cross-session evolution
-- `v0.4`: Venus/VEMU/gem5/RTL case study
-- `v0.5`: local Markdown retrieval with citations and LLM-Wiki-style search/read
+- `v0.2`: bootstrap and personal memory workflows
+- `v0.3`: GitHub PR comment workflow
+- `v0.4`: Skilllet versioning, deprecation, and cross-session evolution
+- `v0.5`: Venus/VEMU/gem5/RTL case study
+- `v0.6`: local Markdown retrieval with citations and LLM-Wiki-style search/read
 - `v1.0`: CLI, GitHub Action, docs, examples, and demo video
+
+See [`docs/roadmap.md`](docs/roadmap.md) for the detailed roadmap.
 
 ## LLM-Wiki Compatibility
 

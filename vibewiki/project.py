@@ -8,6 +8,8 @@ from .text_utils import write_text_if_allowed
 
 CONFIG_TEMPLATE = """version: 1
 project_name: {project_name}
+memory:
+  scope: {scope}
 wiki_dir: docs/wiki
 skills_dir: skills
 skilllets_dir: skills/skilllets
@@ -167,8 +169,9 @@ AGENTS_TEMPLATE = """# Project Agent Rules
 """
 
 
-def init_project(project: Path, force: bool = False) -> list[Path]:
+def init_project(project: Path, force: bool = False, scope: str = "project") -> list[Path]:
     root = project.resolve()
+    clean_scope = _scope(scope)
     created: list[Path] = []
 
     for directory in [
@@ -184,9 +187,12 @@ def init_project(project: Path, force: bool = False) -> list[Path]:
         directory.mkdir(parents=True, exist_ok=True)
 
     files = {
-        root / ".vibewiki" / "config.yaml": CONFIG_TEMPLATE.format(project_name=root.name),
+        root / ".vibewiki" / "config.yaml": CONFIG_TEMPLATE.format(
+            project_name=root.name,
+            scope=clean_scope,
+        ),
         root / ".vibewiki" / "skill_registry.yaml": REGISTRY_TEMPLATE,
-        root / "docs" / "wiki" / "index.md": WIKI_INDEX,
+        root / "docs" / "wiki" / "index.md": _wiki_index(clean_scope),
         root / "docs" / "wiki" / "development_notes.md": DEVELOPMENT_NOTES,
         root / "docs" / "wiki" / "knowledge.md": KNOWLEDGE,
         root / "docs" / "wiki" / "known_issues.md": KNOWN_ISSUES,
@@ -198,7 +204,7 @@ def init_project(project: Path, force: bool = False) -> list[Path]:
         root / "skills" / "skilllets" / "index.md": SKILLLETS_INDEX,
         root / "skills" / "prompt_patterns" / "index.md": PROMPT_PATTERNS_INDEX,
         root / "skills" / "workflows" / "index.md": WORKFLOWS_INDEX,
-        root / "AGENTS.md": AGENTS_TEMPLATE,
+        root / "AGENTS.md": _agents_template(clean_scope),
     }
 
     for path, text in files.items():
@@ -258,3 +264,28 @@ def _ensure_gitignore_cache(root: Path) -> bool:
         return True
     path.write_text(f"{line}\n", encoding="utf-8")
     return True
+
+
+def _scope(value: str) -> str:
+    clean = value.strip().lower()
+    if clean in {"personal", "project"}:
+        return clean
+    return "project"
+
+
+def _wiki_index(scope: str) -> str:
+    if scope == "personal":
+        return WIKI_INDEX.replace("Project Wiki / 项目 Wiki", "Personal Wiki / 个人 Wiki").replace(
+            "project memory",
+            "personal memory",
+        ).replace("项目记忆", "个人记忆")
+    return WIKI_INDEX
+
+
+def _agents_template(scope: str) -> str:
+    if scope == "personal":
+        return AGENTS_TEMPLATE.replace("Project Agent Rules", "Personal Agent Rules").replace(
+            "project guidance",
+            "personal guidance",
+        )
+    return AGENTS_TEMPLATE

@@ -2,22 +2,49 @@
 
 ## One Sentence
 
-VibeWiki is a project memory framework for AI coding. It turns successful
-Codex, Claude, Cursor, or Copilot sessions into reviewed Wiki patches,
-typed findings, composable skilllets, prompt patterns, workflows, and
-agent-facing rules.
+VibeWiki is a project and personal memory framework for AI coding. It can
+bootstrap a baseline Wiki from a repository scan, then turn successful Codex,
+Claude, Cursor, ChatGPT, or Copilot sessions into reviewed Wiki patches, typed
+findings, composable skilllets, prompt patterns, workflows, and agent-facing
+rules.
 
 ## Core Loop
 
 ```text
-capture -> distill -> review -> merge -> reuse
+bootstrap -> capture/import -> distill -> review -> merge -> reuse
 ```
 
 ## Core Model
 
 ```text
-Session -> Findings -> Promotion -> Skilllets / Patterns / Workflows -> Review -> Merge
+Project Scan / Session -> Findings -> Promotion -> Skilllets / Patterns / Workflows -> Review -> Merge
 ```
+
+VibeWiki has two memory scopes:
+
+- `project`: repository-specific facts, commands, caveats, architecture notes,
+  build/test workflows, and agent rules
+- `personal`: cross-project practices, reusable prompts, research notes,
+  instincts, and workflows that should follow the user across repositories
+
+The same review-first pipeline applies to both scopes. Project memory should be
+more concrete and evidence-bound; personal memory should be promoted only when a
+lesson proves useful beyond one repository.
+
+## Bootstrap And Growth
+
+VibeWiki supports two complementary modes:
+
+- bootstrap memory: run `vibewiki understand` or a project-specific build/test
+  skill to produce the first project brief, first-file reading list, and
+  baseline commands
+- grow memory: import or capture vibe-coding conversations, distill what
+  changed, review candidates, and merge approved knowledge or skills back into
+  the Wiki
+
+The bootstrap pass gives an AI agent enough orientation to start work without
+pretending the Wiki is complete. The growth loop makes the Wiki better every
+time the user solves a real problem with AI.
 
 A session is evidence, not a skill. One long session may contain multiple
 purposes and reusable ideas. A reusable skilllet should stay small enough to
@@ -72,6 +99,16 @@ One AI coding session can provide:
 - AI conversation summary
 - user notes
 - things that should not be recorded
+
+A project bootstrap pass can provide:
+
+- README or manifest summary
+- file tree and language shape
+- main entrypoints
+- build, test, and package scripts
+- docs and test locations
+- first files to read
+- missing verification or documentation follow-ups
 
 ## Outputs
 
