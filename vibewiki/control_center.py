@@ -84,19 +84,23 @@ def render_control_center(
   <style>
     :root {{
       color-scheme: light;
-      --ink: #17202a;
-      --muted: #667085;
-      --line: #d9ded8;
-      --canvas: #f3f5f2;
+      --ink: #1d1d1f;
+      --muted: #6e6e73;
+      --subtle: #86868b;
+      --line: rgba(29, 29, 31, .10);
+      --line-strong: rgba(29, 29, 31, .16);
+      --canvas: #f5f5f7;
       --paper: #ffffff;
-      --soft: #eef3ef;
-      --teal: #238f84;
-      --gold: #d7a62d;
-      --coral: #e66a4e;
-      --blue: #397da6;
-      --green: #6f9f68;
-      --danger: #b74252;
-      --sidebar: #17202a;
+      --soft: #f0f0f2;
+      --teal: #137f77;
+      --teal-soft: #edf8f6;
+      --gold: #d99a1b;
+      --coral: #d96b52;
+      --blue: #0071e3;
+      --green: #2f7d4c;
+      --danger: #c43f4f;
+      --sidebar: rgba(249, 249, 251, .86);
+      --shadow: 0 1px 2px rgba(0, 0, 0, .035), 0 12px 36px rgba(0, 0, 0, .045);
     }}
     * {{ box-sizing: border-box; }}
     html {{ scroll-behavior: smooth; }}
@@ -104,134 +108,157 @@ def render_control_center(
       margin: 0;
       background: var(--canvas);
       color: var(--ink);
-      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      line-height: 1.5;
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Inter, system-ui, sans-serif;
+      line-height: 1.45;
       letter-spacing: 0;
+      -webkit-font-smoothing: antialiased;
     }}
     button, input, textarea, select {{ font: inherit; letter-spacing: 0; }}
     button, .button {{
-      min-height: 38px;
-      border: 1px solid var(--line);
-      border-radius: 6px;
-      padding: 8px 13px;
+      min-height: 36px;
+      border: 1px solid var(--line-strong);
+      border-radius: 8px;
+      padding: 7px 13px;
       background: var(--paper);
       color: var(--ink);
       cursor: pointer;
       font-size: 13px;
-      font-weight: 700;
+      font-weight: 600;
       text-decoration: none;
       white-space: nowrap;
+      transition: background-color .16s ease, border-color .16s ease, box-shadow .16s ease;
     }}
-    button:hover, .button:hover {{ border-color: #9da8a0; }}
-    button.primary, .button.primary {{ background: var(--teal); border-color: var(--teal); color: #fff; }}
+    button:hover, .button:hover {{ border-color: rgba(29, 29, 31, .28); background: #fbfbfd; }}
+    button.primary, .button.primary {{ background: var(--teal); border-color: var(--teal); color: #fff; box-shadow: 0 1px 2px rgba(19, 127, 119, .22); }}
+    button.primary:hover, .button.primary:hover {{ background: #0f716a; border-color: #0f716a; }}
     button.secondary, .button.secondary {{ color: var(--blue); }}
-    button.quiet, .button.quiet {{ background: transparent; color: var(--muted); }}
+    button.quiet, .button.quiet {{ background: rgba(255,255,255,.58); color: var(--muted); }}
     input, textarea, select {{
       width: 100%;
-      border: 1px solid var(--line);
-      border-radius: 6px;
-      background: #fff;
+      border: 1px solid var(--line-strong);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, .92);
       color: var(--ink);
-      padding: 10px 11px;
+      padding: 10px 12px;
       font-size: 14px;
+      box-shadow: inset 0 1px 1px rgba(0, 0, 0, .02);
+      transition: border-color .16s ease, box-shadow .16s ease;
     }}
-    input:focus, textarea:focus, select:focus {{ outline: 2px solid rgba(35, 143, 132, .22); border-color: var(--teal); }}
-    textarea {{ min-height: 142px; resize: vertical; }}
-    label {{ display: grid; gap: 6px; color: var(--muted); font-size: 12px; font-weight: 700; }}
-    .app {{ min-height: 100vh; display: grid; grid-template-columns: 224px minmax(0, 1fr); }}
+    input:focus, textarea:focus, select:focus {{ outline: 0; border-color: rgba(0, 113, 227, .58); box-shadow: 0 0 0 3px rgba(0, 113, 227, .12); }}
+    textarea {{ min-height: 128px; resize: vertical; }}
+    label {{ display: grid; gap: 6px; color: var(--muted); font-size: 12px; font-weight: 600; }}
+    .app {{ min-height: 100vh; display: grid; grid-template-columns: 236px minmax(0, 1fr); }}
     .sidebar {{
       position: sticky;
       top: 0;
       height: 100vh;
-      padding: 22px 16px;
+      padding: 24px 16px 18px;
       background: var(--sidebar);
-      color: #fff;
+      border-right: 1px solid var(--line);
+      color: var(--ink);
       display: flex;
       flex-direction: column;
-      gap: 24px;
+      gap: 28px;
+      -webkit-backdrop-filter: saturate(180%) blur(24px);
+      backdrop-filter: saturate(180%) blur(24px);
     }}
-    .brand {{ display: flex; align-items: center; gap: 10px; color: #fff; text-decoration: none; }}
+    .brand {{ display: flex; align-items: center; gap: 11px; padding: 0 5px; color: var(--ink); text-decoration: none; }}
     .brand-mark {{
-      width: 36px;
-      height: 36px;
+      width: 40px;
+      height: 40px;
       display: block;
       flex: 0 0 auto;
+      filter: drop-shadow(0 3px 7px rgba(23, 35, 45, .14));
     }}
     .brand-mark svg {{ display: block; width: 100%; height: 100%; }}
-    .brand strong {{ display: block; font-size: 16px; }}
-    .brand small {{ display: block; color: #9eaaa5; font-size: 11px; }}
-    nav {{ display: grid; gap: 5px; }}
+    .brand strong {{ display: block; font-size: 16px; line-height: 1.2; font-weight: 680; }}
+    .brand small {{ display: block; margin-top: 3px; color: var(--subtle); font-size: 11px; }}
+    nav {{ display: grid; gap: 3px; }}
     nav a {{
-      min-height: 40px;
+      position: relative;
+      min-height: 38px;
       display: flex;
       align-items: center;
-      padding: 8px 10px;
-      border-radius: 6px;
-      color: #bac4c0;
+      padding: 8px 12px 8px 29px;
+      border-radius: 8px;
+      color: var(--muted);
       text-decoration: none;
       font-size: 13px;
-      font-weight: 650;
+      font-weight: 590;
     }}
-    nav a:hover, nav a.active {{ background: rgba(255,255,255,.09); color: #fff; }}
-    .side-status {{ margin-top: auto; padding-top: 16px; border-top: 1px solid rgba(255,255,255,.12); }}
-    .side-status span {{ display: block; color: #9eaaa5; font-size: 11px; }}
-    .side-status strong {{ display: block; margin-top: 3px; font-size: 13px; overflow-wrap: anywhere; }}
-    .main {{ min-width: 0; padding: 24px 28px 48px; }}
-    .topbar {{ display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-bottom: 20px; }}
-    .topbar h1 {{ margin: 0; font-size: 26px; line-height: 1.15; }}
-    .topbar p {{ margin: 4px 0 0; color: var(--muted); font-size: 13px; }}
+    nav a::before {{ content: ""; position: absolute; left: 13px; width: 6px; height: 6px; border-radius: 50%; background: #c7c7cc; }}
+    nav a:hover {{ background: rgba(0, 0, 0, .035); color: var(--ink); }}
+    nav a.active {{ background: rgba(0, 0, 0, .055); color: var(--ink); font-weight: 650; }}
+    nav a.active::before {{ background: var(--teal); box-shadow: 0 0 0 3px rgba(19,127,119,.12); }}
+    .side-status {{ margin-top: auto; padding: 15px 11px 2px; border-top: 1px solid var(--line); }}
+    .side-status span {{ display: block; color: var(--subtle); font-size: 10px; text-transform: uppercase; }}
+    .side-status strong {{ display: block; margin-top: 4px; font-size: 12px; font-weight: 600; overflow-wrap: anywhere; }}
+    .main {{ width: 100%; max-width: 1480px; min-width: 0; margin: 0 auto; padding: 30px 34px 56px; }}
+    .topbar {{ display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-bottom: 22px; }}
+    .topbar h1 {{ margin: 0; font-size: 32px; line-height: 1.08; font-weight: 720; }}
+    .topbar p {{ margin: 7px 0 0; color: var(--muted); font-size: 12px; }}
     .top-actions {{ display: flex; align-items: center; gap: 8px; }}
-    .language {{ display: inline-flex; padding: 3px; border: 1px solid var(--line); border-radius: 6px; background: #fff; }}
-    .language button {{ min-width: 42px; min-height: 30px; padding: 4px 8px; border: 0; background: transparent; color: var(--muted); }}
+    .language {{ display: inline-flex; padding: 3px; border: 1px solid var(--line); border-radius: 8px; background: rgba(255,255,255,.72); box-shadow: 0 1px 2px rgba(0,0,0,.03); }}
+    .language button {{ min-width: 41px; min-height: 28px; padding: 3px 8px; border: 0; border-radius: 6px; background: transparent; color: var(--muted); box-shadow: none; }}
     .language button.active {{ background: var(--ink); color: #fff; }}
     .message {{
       margin-bottom: 16px;
-      padding: 11px 13px;
-      border: 1px solid #a9d3cd;
-      border-left: 4px solid var(--teal);
-      border-radius: 6px;
-      background: #f0faf8;
-      color: #155e57;
+      padding: 11px 14px;
+      border: 1px solid rgba(19, 127, 119, .20);
+      border-radius: 8px;
+      background: var(--teal-soft);
+      color: #135f59;
       font-size: 13px;
     }}
-    .metrics {{ display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-bottom: 14px; }}
-    .metric {{ min-height: 104px; padding: 16px; border: 1px solid var(--line); border-radius: 6px; background: #fff; }}
-    .metric b {{ display: block; margin-bottom: 12px; font-size: 30px; line-height: 1; }}
-    .metric span {{ color: var(--muted); font-size: 12px; font-weight: 750; }}
-    .metric small {{ display: block; margin-top: 4px; color: #8b948f; font-size: 11px; }}
+    .metrics {{ display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); margin-bottom: 12px; border: 1px solid var(--line); border-radius: 8px; background: rgba(255,255,255,.82); box-shadow: var(--shadow); overflow: hidden; }}
+    .metric {{ min-height: 91px; padding: 15px 18px; border-right: 1px solid var(--line); }}
+    .metric:last-child {{ border-right: 0; }}
+    .metric b {{ display: block; margin-bottom: 9px; font-size: 27px; line-height: 1; font-weight: 680; font-variant-numeric: tabular-nums; }}
+    .metric span {{ color: var(--ink); font-size: 11px; font-weight: 650; }}
+    .metric small {{ display: block; margin-top: 2px; color: var(--subtle); font-size: 10px; }}
     .flow {{
       display: grid;
       grid-template-columns: repeat(4, minmax(0, 1fr));
       border: 1px solid var(--line);
-      border-radius: 6px;
-      background: #fff;
-      margin-bottom: 16px;
+      border-radius: 8px;
+      background: rgba(255,255,255,.62);
+      margin-bottom: 18px;
       overflow: hidden;
     }}
-    .flow-step {{ position: relative; min-height: 74px; padding: 13px 14px 13px 48px; border-right: 1px solid var(--line); }}
+    .flow-step {{ position: relative; min-height: 63px; padding: 11px 13px 10px 46px; border-right: 1px solid var(--line); }}
     .flow-step:last-child {{ border-right: 0; }}
-    .step-num {{ position: absolute; left: 14px; top: 17px; width: 24px; height: 24px; display: grid; place-items: center; border-radius: 50%; background: var(--soft); color: var(--muted); font-size: 11px; font-weight: 850; }}
+    .step-num {{ position: absolute; left: 14px; top: 17px; width: 23px; height: 23px; display: grid; place-items: center; border-radius: 50%; background: #e8e8ed; color: var(--muted); font-size: 10px; font-weight: 700; }}
     .flow-step.done .step-num {{ background: var(--green); color: #fff; }}
-    .flow-step.current {{ box-shadow: inset 0 -3px var(--gold); }}
-    .flow-step strong {{ display: block; font-size: 13px; }}
-    .flow-step small {{ color: var(--muted); font-size: 11px; }}
-    .columns {{ display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(320px, .85fr); gap: 16px; align-items: start; }}
-    .panel {{ min-width: 0; margin-bottom: 16px; border: 1px solid var(--line); border-radius: 6px; background: #fff; }}
-    .panel-head {{ display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 15px 16px; border-bottom: 1px solid var(--line); }}
-    .panel-head h2 {{ margin: 0; font-size: 15px; }}
-    .panel-head small {{ color: var(--muted); font-size: 11px; }}
-    .panel-body {{ padding: 16px; }}
-    .tabs {{ display: flex; gap: 4px; padding: 4px; border-radius: 6px; background: var(--soft); margin-bottom: 14px; }}
+    .flow-step.current {{ box-shadow: inset 0 -2px var(--gold); }}
+    .flow-step strong {{ display: block; font-size: 12px; font-weight: 650; }}
+    .flow-step small {{ color: var(--subtle); font-size: 10px; }}
+    .columns {{ display: grid; grid-template-columns: minmax(0, 1.16fr) minmax(340px, .84fr); gap: 16px; align-items: start; }}
+    .panel {{ min-width: 0; margin-bottom: 16px; border: 1px solid var(--line); border-radius: 8px; background: rgba(255,255,255,.88); box-shadow: var(--shadow); overflow: hidden; }}
+    .panel-head {{ display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 16px; border-bottom: 1px solid var(--line); }}
+    .panel-head h2 {{ margin: 0; font-size: 15px; font-weight: 670; }}
+    .panel-head small {{ color: var(--subtle); font-size: 10px; }}
+    .panel-body {{ padding: 15px 16px 16px; }}
+    .command-center {{ margin-bottom: 16px; }}
+    .command-head {{ padding: 16px 18px 14px; }}
+    .command-title {{ display: flex; align-items: center; gap: 10px; }}
+    .command-icon {{ width: 23px; height: 23px; display: block; flex: 0 0 auto; color: var(--teal); }}
+    .command-icon svg {{ display: block; width: 100%; height: 100%; }}
+    .command-head h2 {{ font-size: 16px; }}
+    .connection {{ display: inline-flex; align-items: center; gap: 6px; color: var(--subtle); font-size: 10px; }}
+    .connection::before {{ content: ""; width: 7px; height: 7px; border-radius: 50%; background: #34c759; box-shadow: 0 0 0 3px rgba(52,199,89,.10); }}
+    .command-body {{ display: grid; grid-template-columns: minmax(0, 1.12fr) minmax(320px, .88fr); gap: 12px; padding: 15px 16px 16px; }}
+    .command-body form {{ min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }}
+    .command-body input {{ min-width: 0; height: 40px; }}
+    .command-body button {{ min-height: 40px; }}
+    .tabs {{ display: flex; gap: 3px; padding: 3px; border-radius: 8px; background: var(--soft); margin-bottom: 14px; }}
     .tabs button {{ flex: 1; min-height: 34px; border: 0; background: transparent; color: var(--muted); }}
-    .tabs button.active {{ background: #fff; color: var(--ink); box-shadow: 0 1px 3px rgba(23,32,42,.1); }}
+    .tabs button.active {{ background: #fff; color: var(--ink); box-shadow: 0 1px 4px rgba(0,0,0,.10); }}
     .tab-panel[hidden] {{ display: none; }}
     .form-grid {{ display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }}
     .form-stack {{ display: grid; gap: 10px; }}
     .form-actions {{ display: flex; gap: 8px; align-items: center; justify-content: space-between; flex-wrap: wrap; }}
     .check {{ display: inline-flex; grid-template-columns: auto 1fr; align-items: center; gap: 7px; color: var(--muted); font-size: 12px; }}
     .check input {{ width: auto; }}
-    .ask-form {{ display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }}
-    .ask-actions {{ display: flex; gap: 8px; margin-top: 8px; }}
     .result {{ border-top: 1px solid var(--line); padding: 14px 16px; background: #f8faf8; }}
     .result-head {{ display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 8px; }}
     .result h3 {{ margin: 0; font-size: 13px; }}
@@ -240,20 +267,20 @@ def render_control_center(
       margin: 0;
       padding: 12px;
       overflow: auto;
-      border-radius: 6px;
-      background: #17202a;
+      border-radius: 8px;
+      background: #1d1d1f;
       color: #edf4f1;
       white-space: pre-wrap;
       overflow-wrap: anywhere;
       font: 12px/1.55 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
     }}
     .queue {{ display: grid; }}
-    .queue-row {{ display: grid; grid-template-columns: minmax(0, 1.5fr) 120px 125px auto; gap: 12px; align-items: center; padding: 12px 16px; border-bottom: 1px solid var(--line); }}
+    .queue-row {{ display: grid; grid-template-columns: minmax(0, 1.5fr) 112px 114px auto; gap: 12px; align-items: center; padding: 12px 16px; border-bottom: 1px solid var(--line); }}
     .queue-row:last-child {{ border-bottom: 0; }}
     .queue-title {{ min-width: 0; }}
     .queue-title strong {{ display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }}
     .queue-title small {{ color: var(--muted); font-size: 11px; }}
-    .status {{ display: inline-flex; width: fit-content; padding: 3px 8px; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); font-size: 11px; font-weight: 750; }}
+    .status {{ display: inline-flex; width: fit-content; padding: 3px 8px; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); font-size: 10px; font-weight: 650; }}
     .status.candidate {{ color: #a04c38; border-color: #edbaa9; background: #fff7f4; }}
     .status.approved {{ color: #31734b; border-color: #add0b9; background: #f4fbf6; }}
     .status.merged {{ color: #356e91; border-color: #adc8da; background: #f3f8fb; }}
@@ -265,27 +292,36 @@ def render_control_center(
     .memory-meta {{ display: flex; gap: 8px; margin-top: 5px; color: var(--muted); font-size: 11px; }}
     .bars {{ display: grid; gap: 11px; }}
     .bar-row {{ display: grid; grid-template-columns: 110px minmax(0, 1fr) 28px; gap: 8px; align-items: center; font-size: 12px; }}
-    .bar-track {{ height: 9px; border-radius: 3px; background: var(--soft); overflow: hidden; }}
+    .bar-track {{ height: 7px; border-radius: 4px; background: var(--soft); overflow: hidden; }}
     .bar-fill {{ height: 100%; border-radius: 3px; background: var(--blue); }}
     .bar-row:nth-child(2n) .bar-fill {{ background: var(--gold); }}
     .bar-row:nth-child(3n) .bar-fill {{ background: var(--coral); }}
     .empty {{ padding: 24px 16px; color: var(--muted); font-size: 13px; text-align: center; }}
     details.advanced {{ border-top: 1px solid var(--line); }}
-    details.advanced summary {{ padding: 13px 16px; cursor: pointer; color: var(--muted); font-size: 12px; font-weight: 750; }}
+    details.advanced summary {{ padding: 13px 16px; cursor: pointer; color: var(--muted); font-size: 12px; font-weight: 650; }}
     .advanced-body {{ display: flex; gap: 8px; padding: 0 16px 16px; flex-wrap: wrap; }}
+    .button-icon {{ display: inline-flex; align-items: center; gap: 6px; }}
+    .button-icon svg {{ width: 14px; height: 14px; }}
+    .visually-hidden {{ position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }}
     @media (max-width: 1050px) {{
+      .command-body {{ grid-template-columns: 1fr; }}
       .columns {{ grid-template-columns: 1fr; }}
       .queue-row {{ grid-template-columns: minmax(0, 1fr) 110px auto; }}
       .queue-row .review-count {{ display: none; }}
     }}
-    @media (max-width: 760px) {{
+    @media (max-width: 820px) {{
       .app {{ grid-template-columns: 1fr; }}
-      .sidebar {{ position: static; height: auto; padding: 12px; flex-direction: row; align-items: center; overflow-x: auto; }}
+      .sidebar {{ position: sticky; z-index: 20; height: auto; padding: 10px 12px 8px; display: grid; grid-template-columns: 1fr; gap: 8px; overflow: visible; border-right: 0; border-bottom: 1px solid var(--line); }}
+      .brand {{ padding: 0; }}
+      .brand-mark {{ width: 34px; height: 34px; }}
       .brand small, .side-status {{ display: none; }}
-      nav {{ display: flex; }}
-      nav a {{ white-space: nowrap; }}
-      .main {{ padding: 16px 12px 36px; }}
+      nav {{ display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); width: 100%; }}
+      nav a {{ min-height: 33px; justify-content: center; padding: 6px 4px; white-space: nowrap; }}
+      nav a::before {{ display: none; }}
+      .main {{ padding: 22px 16px 40px; }}
       .metrics {{ grid-template-columns: repeat(2, minmax(0, 1fr)); }}
+      .metric:nth-child(2) {{ border-right: 0; }}
+      .metric:nth-child(-n+2) {{ border-bottom: 1px solid var(--line); }}
       .flow {{ grid-template-columns: repeat(2, minmax(0, 1fr)); }}
       .flow-step:nth-child(2) {{ border-right: 0; }}
       .flow-step:nth-child(-n+2) {{ border-bottom: 1px solid var(--line); }}
@@ -296,9 +332,9 @@ def render_control_center(
       .metrics {{ grid-template-columns: 1fr 1fr; }}
       .metric {{ min-height: 90px; padding: 13px; }}
       .metric b {{ font-size: 25px; }}
+      .command-body form {{ grid-template-columns: 1fr; }}
       .queue-row {{ grid-template-columns: 1fr; }}
       .row-actions {{ justify-content: flex-start; }}
-      .ask-form {{ grid-template-columns: 1fr; }}
       .topbar {{ display: block; }}
       .top-actions {{ margin-top: 10px; }}
     }}
@@ -335,10 +371,16 @@ def render_control_center(
       <header class="topbar" id="overview">
         <div>
           <h1>{_escape(data.project_name)}</h1>
-          <p>{_i18n("Memory Control Center", "记忆中控台")} · {_escape(utcish_timestamp())}</p>
+          <p>{_i18n("Memory Control Center · Live workspace", "记忆中控台 · 当前工作区")}</p>
         </div>
         <div class="top-actions">
-          <a class="button quiet" href="/">{_i18n("Refresh", "刷新")}</a>
+          <a class="button quiet button-icon" href="/">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M21 12a9 9 0 0 1-15.2 6.5L3 16"/><path d="M3 21v-5h5"/>
+              <path d="M3 12A9 9 0 0 1 18.2 5.5L21 8"/><path d="M21 3v5h-5"/>
+            </svg>
+            {_i18n("Refresh", "刷新")}
+          </a>
           <div class="language" role="group" aria-label="Language">
             <button type="button" data-lang-choice="en" aria-pressed="true">EN</button>
             <button type="button" data-lang-choice="zh" aria-pressed="false">中文</button>
@@ -347,6 +389,33 @@ def render_control_center(
       </header>
 
       {message_html}
+
+      <section class="panel command-center" id="reuse">
+        <div class="panel-head command-head">
+          <div class="command-title">
+            <span class="command-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/>
+              </svg>
+            </span>
+            <h2>{_i18n("Ask project memory", "向项目记忆提问")}</h2>
+          </div>
+          <span class="connection">{_i18n("LLM connected" if configured_llm else "Local answer mode", "LLM 已连接" if configured_llm else "本地回答模式")}</span>
+        </div>
+        <div class="command-body">
+          <form method="post" action="/action/ask">
+            <label class="visually-hidden" for="memory-query">{_i18n("Question", "问题")}</label>
+            <input id="memory-query" required name="query" data-placeholder-en="What does this project already know?" data-placeholder-zh="这个项目已经知道什么？" placeholder="What does this project already know?">
+            <button class="primary" type="submit">{_i18n("Ask", "提问")}</button>
+          </form>
+          <form method="post" action="/action/context">
+            <label class="visually-hidden" for="agent-task">{_i18n("Agent task", "Agent 任务")}</label>
+            <input id="agent-task" required name="query" data-placeholder-en="Prepare context for an AI task" data-placeholder-zh="为 AI 任务准备上下文" placeholder="Prepare context for an AI task">
+            <button class="secondary" type="submit">{_i18n("Build context", "生成上下文")}</button>
+          </form>
+        </div>
+        {result_html}
+      </section>
 
       <section class="metrics" aria-label="Memory metrics">
         {_metric(len(data.sessions), "Conversations", "历史对话", "captured", "已记录")}
@@ -422,26 +491,6 @@ def render_control_center(
         </div>
 
         <div>
-          <section class="panel" id="reuse">
-            <div class="panel-head">
-              <h2>{_i18n("Ask your memory", "向记忆提问")}</h2>
-              <small>{_i18n("LLM connected" if configured_llm else "Local answer mode", "LLM 已连接" if configured_llm else "本地回答模式")}</small>
-            </div>
-            <div class="panel-body">
-              <form method="post" action="/action/ask">
-                <div class="ask-form">
-                  <input required name="query" data-placeholder-en="How did we solve this before?" data-placeholder-zh="我们之前是怎么解决这个问题的？" placeholder="How did we solve this before?">
-                  <button class="primary" type="submit">{_i18n("Ask", "提问")}</button>
-                </div>
-              </form>
-              <form class="ask-actions" method="post" action="/action/context">
-                <input required name="query" data-placeholder-en="Task for the next AI agent" data-placeholder-zh="下一位 AI agent 要完成的任务" placeholder="Task for the next AI agent">
-                <button class="secondary" type="submit">{_i18n("Build AI context", "生成 AI 上下文")}</button>
-              </form>
-            </div>
-            {result_html}
-          </section>
-
           <section class="panel" id="memory">
             <div class="panel-head">
               <h2>{_i18n("Recent memory", "最近记忆")}</h2>
