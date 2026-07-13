@@ -6,6 +6,7 @@ import sys
 from pathlib import Path
 
 from .capture import capture_session
+from .dashboard import generate_dashboard
 from .distill import distill_session
 from .doctor import build_doctor_report, format_doctor_report
 from .events import append_event, format_events, read_events
@@ -227,6 +228,13 @@ def build_parser() -> argparse.ArgumentParser:
     review_ui.add_argument("--patch-dir", default=None, help="Specific patch directory to review.")
     review_ui.add_argument("--host", default="127.0.0.1", help="Host to bind. Defaults to 127.0.0.1.")
     review_ui.add_argument("--port", type=int, default=8765, help="Port to bind. Defaults to 8765.")
+
+    dashboard = subparsers.add_parser(
+        "dashboard",
+        help="Generate a local HTML dashboard with VibeWiki memory charts.",
+    )
+    dashboard.add_argument("--output", default=None, help="HTML file to write.")
+    dashboard.add_argument("--lang", choices=["zh", "en"], default="zh", help="Dashboard language.")
 
     merge = subparsers.add_parser("merge", help="Merge approved patches into project memory.")
     merge.add_argument("--patch-dir", default=None, help="Specific patch directory to merge.")
@@ -560,6 +568,12 @@ def run(args: argparse.Namespace) -> int:
     if args.subcommand == "review-ui":
         patch_dir = _path(args.patch_dir) if args.patch_dir else None
         serve_review_ui(project, patch_dir=patch_dir, host=args.host, port=args.port)
+        return 0
+
+    if args.subcommand == "dashboard":
+        output = _path(args.output) if args.output else None
+        dashboard_path = generate_dashboard(project, output=output, lang=args.lang)
+        print(f"Generated dashboard: {dashboard_path}")
         return 0
 
     if args.subcommand == "merge":

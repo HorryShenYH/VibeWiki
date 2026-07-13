@@ -52,10 +52,12 @@ vibewiki setup
 vibewiki import-markdown examples/venus/sample_session.md --session-name demo
 vibewiki distill
 vibewiki doctor
+vibewiki dashboard
 vibewiki review-board
 ```
 
-Then open the generated review board under `.vibewiki/patches/<session>/`.
+Then open `.vibewiki/dashboard.html` for the memory dashboard, or the generated
+review board under `.vibewiki/patches/<session>/`.
 
 For the full walkthrough, see [`docs/demo.md`](docs/demo.md).
 
@@ -75,6 +77,7 @@ The first version is intentionally local and conservative:
 - `vibewiki review-plan` groups raw candidates into a smaller review queue.
 - `vibewiki review-board` renders a local HTML review board for candidate patches.
 - `vibewiki review-ui` serves a clickable local review UI for SSH/remote workflows.
+- `vibewiki dashboard` renders a local HTML dashboard with memory and review charts.
 - `vibewiki validate-skill` checks Skill Patch quality gates.
 - `vibewiki review` records human approval.
 - `vibewiki review-item` records item-level approve/reject/defer/downgrade/merge/edit decisions.
@@ -169,6 +172,7 @@ vibewiki capture --goal "Fix simulator mismatch" \
   --command "python3 compare_outputs.py" \
   --tests "compare_outputs.py passed"
 vibewiki distill
+vibewiki dashboard
 vibewiki review-board
 vibewiki validate-skill
 vibewiki review --approve
@@ -180,6 +184,7 @@ Or import a saved AI session:
 ```bash
 vibewiki import-markdown ./codex-session.md
 vibewiki distill
+vibewiki dashboard
 vibewiki review-board
 vibewiki validate-skill
 vibewiki review --approve
@@ -191,6 +196,7 @@ Or import a shared ChatGPT conversation link:
 ```bash
 vibewiki import-url "https://chatgpt.com/share/..."
 vibewiki distill
+vibewiki dashboard
 vibewiki review-board
 vibewiki review --approve
 vibewiki merge
@@ -299,6 +305,18 @@ You can inspect or regenerate the triage plan from the terminal:
 ```bash
 vibewiki review-plan --patch-dir .vibewiki/patches/<session>
 ```
+
+For a visual project-memory overview, generate the dashboard:
+
+```bash
+vibewiki dashboard
+vibewiki dashboard --lang en --output docs/vibewiki_dashboard.html
+```
+
+The dashboard is a static, dependency-free HTML page with memory-card status,
+review backlog, card type distribution, recent activity, and the next suggested
+command. It is meant for humans, demos, and team standups; `context` remains the
+token-conscious interface for AI agents.
 
 For fine-grained review, use the per-item commands shown on each card:
 

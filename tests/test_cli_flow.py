@@ -11,6 +11,7 @@ from unittest.mock import patch
 
 from vibewiki.capture import capture_session
 from vibewiki.cli import build_parser, run as run_cli
+from vibewiki.dashboard import generate_dashboard
 from vibewiki.distill import distill_session
 from vibewiki.events import read_events
 from vibewiki.import_markdown import extract_hint_lines, import_markdown_session
@@ -769,6 +770,48 @@ python3 compare_outputs.py
             self.assertNotIn("Approve / 批准", ui_html)
             self.assertNotIn("目标：knowledge", ui_html)
             self.assertNotIn("批量备注", ui_html)
+
+    def test_dashboard_renders_memory_charts(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = root / "session.md"
+            source.write_text(
+                """# Debug VEMU Replay
+
+We fixed a replay setup issue.
+
+```bash
+make emu_init
+```
+""",
+                encoding="utf-8",
+            )
+            session = import_markdown_session(root, source, session_name="dashboard-demo")
+            patches = distill_session(root, session_dir=session.session_dir)
+            review_item = next((patches.patch_dir / "findings").glob("*.md"))
+            record_item_decision(
+                root,
+                patch_dir=patches.patch_dir,
+                item=review_item.relative_to(patches.patch_dir).as_posix(),
+                decision="approve",
+            )
+
+            dashboard = generate_dashboard(root, lang="en")
+            html = dashboard.read_text(encoding="utf-8")
+
+            self.assertTrue(dashboard.exists())
+            self.assertIn("VibeWiki Dashboard", html)
+            self.assertIn("Review Funnel", html)
+            self.assertIn("candidate", html)
+            self.assertIn("<svg", html)
+            self.assertIn('data-vibewiki-dashboard="1"', html)
+
+            output = root / "dashboard.html"
+            code, rendered = self.cli(root, "dashboard", "--output", str(output), "--lang", "zh")
+            self.assertEqual(code, 0)
+            self.assertTrue(output.exists())
+            self.assertIn("Generated dashboard:", rendered)
+            self.assertIn("VibeWiki 仪表盘", output.read_text(encoding="utf-8"))
 
     def test_review_plan_triages_raw_candidates(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

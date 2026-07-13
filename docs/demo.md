@@ -71,7 +71,24 @@ This writes candidate patches under `.vibewiki/patches/`, including:
 
 Candidates are not merged into the main Wiki automatically.
 
-## 5. Review
+## 5. Visualize
+
+Generate the memory dashboard:
+
+```bash
+vibewiki dashboard
+```
+
+Open `.vibewiki/dashboard.html` to inspect memory status, review backlog, card
+types, recent activity, and the next suggested command.
+
+For an English UI:
+
+```bash
+vibewiki dashboard --lang en
+```
+
+## 6. Review
 
 Generate a local HTML board:
 
@@ -91,7 +108,7 @@ vibewiki review-ui --port 8765
 
 Then open `http://127.0.0.1:8765/` after forwarding the port.
 
-## 6. Merge Approved Memory
+## 7. Merge Approved Memory
 
 For the demo, approve and merge the latest patch:
 
@@ -102,7 +119,7 @@ vibewiki merge
 
 VibeWiki appends approved memory into `docs/wiki/`, `skills/`, and `AGENTS.md`.
 
-## 7. Reuse Memory
+## 8. Reuse Memory
 
 Ask the local memory:
 

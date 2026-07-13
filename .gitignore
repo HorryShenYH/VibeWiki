@@ -20,5 +20,6 @@ dist/
 .vibewiki/patches/
 .vibewiki/reviews/
 .vibewiki/cache/
+.vibewiki/dashboard.html
 
 VibeWiki 项目计划.pdf

@@ -50,9 +50,12 @@ class MemoryCardResult:
     score: float
 
 
-def collect_memory_cards(project: Path, *, scope: str = "all") -> list[MemoryCard]:
+def collect_memory_cards(project: Path, *, scope: str = "all", ensure: bool = True) -> list[MemoryCard]:
     root = project.resolve()
-    ensure_workspace(root)
+    if ensure:
+        ensure_workspace(root)
+    elif not (root / ".vibewiki").exists():
+        return []
     cards: list[MemoryCard] = []
     for path, status in _memory_files(root, scope=scope):
         text = read_text_if_exists(path)
