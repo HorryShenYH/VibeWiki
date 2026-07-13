@@ -46,8 +46,19 @@ def append_marked_section(path: Path, marker: str, body: str) -> bool:
     if marker in existing:
         return False
     prefix = "" if not existing or existing.endswith("\n") else "\n"
-    path.write_text(f"{existing}{prefix}\n{marker}\n\n{body.rstrip()}\n", encoding="utf-8")
+    end_marker = _marked_section_end(marker)
+    path.write_text(
+        f"{existing}{prefix}\n{marker}\n\n{body.rstrip()}\n\n{end_marker}\n",
+        encoding="utf-8",
+    )
     return True
+
+
+def _marked_section_end(marker: str) -> str:
+    match = re.fullmatch(r"<!--\s*vibewiki:(.+?)\s*-->", marker.strip())
+    if not match:
+        return "<!-- /vibewiki -->"
+    return f"<!-- /vibewiki:{match.group(1)} -->"
 
 
 def markdown_bullets(items: Iterable[str], empty: str = "- Not provided.") -> str:
@@ -62,4 +73,3 @@ def fenced(text: str, language: str = "") -> str:
     if not clean:
         clean = "Not provided."
     return f"```{language}\n{clean}\n```"
-

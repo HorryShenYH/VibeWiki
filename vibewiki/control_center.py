@@ -10,6 +10,12 @@ from urllib.parse import parse_qs, urlencode, urlparse
 import uuid
 
 from .capture import capture_session
+from .conversations import (
+    ConversationRecord,
+    delete_conversation,
+    list_conversations,
+    plan_conversation_deletion,
+)
 from .dashboard import DashboardData, build_dashboard_data
 from .distill import distill_session, parse_sections
 from .events import append_event, read_events
@@ -113,6 +119,8 @@ def render_control_center(
     )
     latest_cards = sorted(data.cards, key=lambda card: card.source.as_posix(), reverse=True)[:6]
     session_rows = _session_rows(data, merged_patches)
+    conversations = list_conversations(root)
+    conversation_rows = _conversation_rows(root, conversations)
     kind_rows = [(kind, count) for kind, count in data.kind_counts.most_common(6) if count]
     max_kind = max((count for _, count in kind_rows), default=1)
     message_html = _message(message, message_zh)
@@ -525,6 +533,64 @@ def render_control_center(
     .tabs {{ margin-bottom: 18px; }}
     .form-stack {{ gap: 14px; }}
     .form-stack textarea {{ min-height: 210px; }}
+    .conversation-workspace {{
+      grid-column: 1 / -1;
+      width: 100%;
+      grid-template-columns: minmax(0, 1.08fr) minmax(360px, .92fr);
+      gap: 16px;
+      align-items: start;
+    }}
+    .app[data-active-view="add"] .conversation-workspace {{ display: grid; }}
+    .conversation-workspace .panel {{ margin-top: 28px; }}
+    .import-panel textarea {{ min-height: 236px; }}
+    .conversation-library {{ min-width: 0; }}
+    .conversation-tools {{ padding: 12px 16px; border-bottom: 1px solid var(--line); }}
+    .conversation-search {{ position: relative; display: block; }}
+    .conversation-search svg {{ position: absolute; left: 11px; top: 50%; width: 15px; height: 15px; color: var(--subtle); transform: translateY(-50%); pointer-events: none; }}
+    .conversation-search input {{ height: 36px; padding: 7px 10px 7px 34px; background: #f5f6f7; font-size: 12px; }}
+    .conversation-list {{ max-height: 590px; overflow: auto; overscroll-behavior: contain; }}
+    .conversation-row {{
+      min-width: 0;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 12px;
+      padding: 15px 16px;
+      border-bottom: 1px solid var(--line);
+    }}
+    .conversation-row:last-child {{ border-bottom: 0; }}
+    .conversation-row[hidden] {{ display: none; }}
+    .conversation-copy {{ min-width: 0; }}
+    .conversation-title-line {{ display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }}
+    .conversation-title-line strong {{ min-width: 0; overflow: hidden; color: var(--ink); font-size: 13px; font-weight: 660; text-overflow: ellipsis; white-space: nowrap; }}
+    .conversation-title-line time {{ flex: 0 0 auto; color: var(--subtle); font-size: 9px; font-variant-numeric: tabular-nums; }}
+    .conversation-preview {{
+      margin: 6px 0 8px;
+      display: -webkit-box;
+      overflow: hidden;
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 1.45;
+      -webkit-box-orient: vertical;
+      -webkit-line-clamp: 2;
+    }}
+    .conversation-meta {{ display: flex; align-items: center; gap: 7px; flex-wrap: wrap; color: var(--subtle); font-size: 9px; }}
+    .conversation-meta .status {{ padding: 2px 6px; font-size: 9px; }}
+    .delete-trigger {{
+      width: 32px;
+      min-width: 32px;
+      min-height: 32px;
+      align-self: center;
+      padding: 0;
+      display: grid;
+      place-items: center;
+      border-color: transparent;
+      background: transparent;
+      color: var(--subtle);
+    }}
+    .delete-trigger svg {{ width: 15px; height: 15px; }}
+    .delete-trigger:hover {{ border-color: rgba(196,63,79,.18); background: #fff3f4; color: var(--danger); }}
+    .conversation-empty {{ display: none; }}
+    .conversation-empty.visible {{ display: block; }}
     .queue-row {{ min-height: 68px; grid-template-columns: minmax(0, 1fr) auto auto; padding: 13px 20px; }}
     .queue-row .review-count {{ display: none; }}
     .queue-title strong {{ font-size: 13px; }}
@@ -560,6 +626,16 @@ def render_control_center(
     .privacy-note {{ padding: 11px 12px; border-left: 2px solid #38a58d; background: #f4f8f7; color: #52615e; font-size: 10px; }}
     .settings-actions {{ display: flex; align-items: center; justify-content: flex-end; gap: 8px; padding-top: 2px; }}
     .settings-actions .disconnect {{ margin-right: auto; color: var(--danger); }}
+    .delete-dialog {{ width: min(500px, calc(100vw - 32px)); }}
+    .delete-summary {{ padding: 13px 14px; border: 1px solid var(--line); border-radius: 8px; background: #f7f8f9; }}
+    .delete-summary strong {{ display: block; overflow-wrap: anywhere; font-size: 13px; }}
+    .delete-summary p {{ margin: 6px 0 0; color: var(--muted); font-size: 11px; }}
+    .delete-impact {{ display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }}
+    .delete-impact span {{ padding: 12px; border-right: 1px solid var(--line); color: var(--muted); font-size: 9px; }}
+    .delete-impact span:last-child {{ border-right: 0; }}
+    .delete-impact b {{ display: block; margin-bottom: 4px; color: var(--ink); font-size: 20px; font-weight: 680; }}
+    button.danger {{ border-color: var(--danger); background: var(--danger); color: #fff; }}
+    button.danger:hover {{ border-color: #ad3342; background: #ad3342; }}
 
     @media (max-width: 900px) {{
       .sidebar {{ height: auto; min-height: 64px; grid-template-columns: auto 1fr auto; gap: 12px; padding: 9px 16px; }}
@@ -567,6 +643,8 @@ def render_control_center(
       nav a svg {{ display: none; }}
       .memory-state {{ display: none; }}
       .columns {{ grid-template-columns: 1fr; }}
+      .conversation-workspace {{ grid-template-columns: 1fr; }}
+      .conversation-library {{ margin-top: 0 !important; }}
       .memory-panel, .memory-insights {{ grid-column: 1; }}
       .memory-insights {{ margin-top: 0; }}
     }}
@@ -608,6 +686,9 @@ def render_control_center(
       .settings-grid {{ grid-template-columns: 1fr; }}
       .settings-grid .wide {{ grid-column: 1; }}
       .settings-actions {{ flex-wrap: wrap; }}
+      .delete-impact {{ grid-template-columns: 1fr; }}
+      .delete-impact span {{ border-right: 0; border-bottom: 1px solid var(--line); }}
+      .delete-impact span:last-child {{ border-bottom: 0; }}
       .settings-actions .disconnect {{ width: 100%; margin-right: 0; order: 3; }}
     }}
   </style>
@@ -628,7 +709,7 @@ def render_control_center(
       </a>
       <nav aria-label="Primary">
         <a class="active" href="#ask" data-view-choice="ask" aria-selected="true">{_icon("sparkles")}{_i18n("Ask", "提问")}</a>
-        <a href="#add" data-view-choice="add" aria-selected="false">{_icon("plus")}{_i18n("Add", "添加")}</a>
+        <a href="#add" data-view-choice="add" aria-selected="false">{_icon("messages")}{_i18n("Chats", "对话")}</a>
         <a href="#attention" data-view-choice="attention" aria-selected="false">{_icon("bell")}{_i18n("Attention", "待处理")}<b class="nav-badge">{pending_reviews}</b></a>
         <a href="#memory" data-view-choice="memory" aria-selected="false">{_icon("book")}{_i18n("Memory", "记忆")}</a>
       </nav>
@@ -683,57 +764,76 @@ def render_control_center(
 
       <section class="columns">
         <div>
-          <section class="panel focus-panel" id="add" data-view-panel="add">
-            <div class="panel-head">
-              <h2>{_i18n("Add a conversation", "添加一段对话")}</h2>
-              <span class="section-count">{len(data.sessions)}</span>
-            </div>
-            <div class="panel-body">
-              <div class="tabs" role="tablist">
-                <button class="active" type="button" data-tab="paste">{_i18n("Paste", "粘贴")}</button>
-                <button type="button" data-tab="link">{_i18n("Share link", "分享链接")}</button>
-                <button type="button" data-tab="result">{_i18n("Quick result", "快速记录")}</button>
+          <section class="conversation-workspace" id="add" data-view-panel="add">
+            <section class="panel import-panel">
+              <div class="panel-head">
+                <h2>{_i18n("Import conversation", "导入对话")}</h2>
               </div>
-              <div class="tab-panel" data-tab-panel="paste">
-                <form class="form-stack" method="post" action="/action/import-text">
-                  <label>{_i18n("Conversation Markdown", "对话 Markdown")}
-                    <textarea required name="body" data-placeholder-en="Paste an exported AI conversation or Markdown notes" data-placeholder-zh="粘贴导出的 AI 对话或 Markdown 笔记" placeholder="Paste an exported AI conversation or Markdown notes"></textarea>
-                  </label>
-                  <div class="form-grid">
-                    <label>{_i18n("Name (optional)", "名称（可选）")}<input name="session_name" data-placeholder-en="e.g. auth-timeout" data-placeholder-zh="例如 auth-timeout" placeholder="e.g. auth-timeout"></label>
-                    <label>{_i18n("Recorder note (optional)", "记录备注（可选）")}<input name="notes" data-placeholder-en="What should VibeWiki keep?" data-placeholder-zh="希望 VibeWiki 保留什么？" placeholder="What should VibeWiki keep?"></label>
-                  </div>
-                  <div class="form-actions">
-                    <label class="check"><input type="checkbox" name="auto_distill" value="yes" checked> {_i18n("Generate memory draft now", "立即生成记忆草稿")}</label>
-                    <button class="primary" type="submit">{_i18n("Import conversation", "导入对话")}</button>
-                  </div>
-                </form>
+              <div class="panel-body">
+                <div class="tabs" role="tablist">
+                  <button class="active" type="button" data-tab="paste">{_i18n("Paste", "粘贴")}</button>
+                  <button type="button" data-tab="link">{_i18n("Share link", "分享链接")}</button>
+                  <button type="button" data-tab="result">{_i18n("Quick result", "快速记录")}</button>
+                </div>
+                <div class="tab-panel" data-tab-panel="paste">
+                  <form class="form-stack" method="post" action="/action/import-text">
+                    <label>{_i18n("Conversation Markdown", "对话 Markdown")}
+                      <textarea required name="body" data-placeholder-en="Paste an exported AI conversation or Markdown notes" data-placeholder-zh="粘贴导出的 AI 对话或 Markdown 笔记" placeholder="Paste an exported AI conversation or Markdown notes"></textarea>
+                    </label>
+                    <div class="form-grid">
+                      <label>{_i18n("Name (optional)", "名称（可选）")}<input name="session_name" data-placeholder-en="e.g. auth-timeout" data-placeholder-zh="例如 auth-timeout" placeholder="e.g. auth-timeout"></label>
+                      <label>{_i18n("Recorder note (optional)", "记录备注（可选）")}<input name="notes" data-placeholder-en="What should VibeWiki keep?" data-placeholder-zh="希望 VibeWiki 保留什么？" placeholder="What should VibeWiki keep?"></label>
+                    </div>
+                    <div class="form-actions">
+                      <label class="check"><input type="checkbox" name="auto_distill" value="yes" checked> {_i18n("Generate memory draft now", "立即生成记忆草稿")}</label>
+                      <button class="primary" type="submit">{_i18n("Import", "导入")}</button>
+                    </div>
+                  </form>
+                </div>
+                <div class="tab-panel" data-tab-panel="link" hidden>
+                  <form class="form-stack" method="post" action="/action/import-url">
+                    <label>{_i18n("Shared conversation URL", "对话分享链接")}<input required type="url" name="url" placeholder="https://chatgpt.com/share/..."></label>
+                    <label>{_i18n("Name (optional)", "名称（可选）")}<input name="session_name" placeholder="shared-conversation"></label>
+                    <div class="form-actions">
+                      <label class="check"><input type="checkbox" name="auto_distill" value="yes" checked> {_i18n("Generate memory draft now", "立即生成记忆草稿")}</label>
+                      <button class="primary" type="submit">{_i18n("Import", "导入")}</button>
+                    </div>
+                  </form>
+                </div>
+                <div class="tab-panel" data-tab-panel="result" hidden>
+                  <form class="form-stack" method="post" action="/action/capture">
+                    <div class="form-grid">
+                      <label>{_i18n("Goal", "目标")}<input required name="goal" data-placeholder-en="What were you trying to do?" data-placeholder-zh="你想完成什么？" placeholder="What were you trying to do?"></label>
+                      <label>{_i18n("Outcome", "结果")}<input name="outcome" data-placeholder-en="What finally worked?" data-placeholder-zh="最后什么方法成功了？" placeholder="What finally worked?"></label>
+                    </div>
+                    <label>{_i18n("Commands, one per line", "关键命令，每行一条")}<textarea name="commands" data-placeholder-en="python3 -m pytest tests/test_feature.py -q" data-placeholder-zh="python3 -m pytest tests/test_feature.py -q" placeholder="python3 -m pytest tests/test_feature.py -q"></textarea></label>
+                    <label>{_i18n("Verification", "验证结果")}<input name="tests" data-placeholder-en="All regression tests passed" data-placeholder-zh="所有回归测试通过" placeholder="All regression tests passed"></label>
+                    <div class="form-actions">
+                      <label class="check"><input type="checkbox" name="auto_distill" value="yes" checked> {_i18n("Generate memory draft now", "立即生成记忆草稿")}</label>
+                      <button class="primary" type="submit">{_i18n("Save", "保存")}</button>
+                    </div>
+                  </form>
+                </div>
               </div>
-              <div class="tab-panel" data-tab-panel="link" hidden>
-                <form class="form-stack" method="post" action="/action/import-url">
-                  <label>{_i18n("Shared conversation URL", "对话分享链接")}<input required type="url" name="url" placeholder="https://chatgpt.com/share/..."></label>
-                  <label>{_i18n("Name (optional)", "名称（可选）")}<input name="session_name" placeholder="shared-conversation"></label>
-                  <div class="form-actions">
-                    <label class="check"><input type="checkbox" name="auto_distill" value="yes" checked> {_i18n("Generate memory draft now", "立即生成记忆草稿")}</label>
-                    <button class="primary" type="submit">{_i18n("Import link", "导入链接")}</button>
-                  </div>
-                </form>
+            </section>
+
+            <aside class="panel conversation-library">
+              <div class="panel-head">
+                <h2>{_i18n("Conversation library", "对话库")}</h2>
+                <span class="section-count">{len(conversations)}</span>
               </div>
-              <div class="tab-panel" data-tab-panel="result" hidden>
-                <form class="form-stack" method="post" action="/action/capture">
-                  <div class="form-grid">
-                    <label>{_i18n("Goal", "目标")}<input required name="goal" data-placeholder-en="What were you trying to do?" data-placeholder-zh="你想完成什么？" placeholder="What were you trying to do?"></label>
-                    <label>{_i18n("Outcome", "结果")}<input name="outcome" data-placeholder-en="What finally worked?" data-placeholder-zh="最后什么方法成功了？" placeholder="What finally worked?"></label>
-                  </div>
-                  <label>{_i18n("Commands, one per line", "关键命令，每行一条")}<textarea name="commands" data-placeholder-en="python3 -m pytest tests/test_feature.py -q" data-placeholder-zh="python3 -m pytest tests/test_feature.py -q" placeholder="python3 -m pytest tests/test_feature.py -q"></textarea></label>
-                  <label>{_i18n("Verification", "验证结果")}<input name="tests" data-placeholder-en="All regression tests passed" data-placeholder-zh="所有回归测试通过" placeholder="All regression tests passed"></label>
-                  <div class="form-actions">
-                    <label class="check"><input type="checkbox" name="auto_distill" value="yes" checked> {_i18n("Generate memory draft now", "立即生成记忆草稿")}</label>
-                    <button class="primary" type="submit">{_i18n("Save result", "保存结果")}</button>
-                  </div>
-                </form>
+              <div class="conversation-tools">
+                <label class="conversation-search">
+                  <span class="visually-hidden">{_i18n("Search conversations", "搜索对话")}</span>
+                  {_icon("search")}
+                  <input type="search" data-conversation-search data-placeholder-en="Search conversations" data-placeholder-zh="搜索对话" placeholder="Search conversations">
+                </label>
               </div>
-            </div>
+              <div class="conversation-list" data-conversation-list>
+                {conversation_rows or _empty("No conversations yet", "还没有对话")}
+                <div class="empty conversation-empty" data-conversation-empty>{_i18n("No matching conversations", "没有匹配的对话")}</div>
+              </div>
+            </aside>
           </section>
 
           <section class="panel focus-panel" id="attention" data-view-panel="attention">
@@ -804,6 +904,33 @@ def render_control_center(
         {disconnect_button}
         <button type="submit" name="settings_action" value="save">{_i18n("Save", "保存")}</button>
         <button class="primary" type="submit" name="settings_action" value="test">{_i18n("Save & test", "保存并测试")}</button>
+      </div>
+    </form>
+  </dialog>
+  <dialog class="model-dialog delete-dialog" data-delete-dialog aria-labelledby="delete-conversation-title">
+    <div class="settings-head">
+      <div>
+        <h2 id="delete-conversation-title">{_i18n("Remove conversation", "删除对话")}</h2>
+        <p>{_i18n("Review the exact Wiki impact before continuing.", "继续前先确认会影响哪些 Wiki 内容。")}</p>
+      </div>
+      <button class="settings-close" type="button" data-delete-close title="Close" aria-label="Close">{_icon("x")}</button>
+    </div>
+    <form class="settings-body" method="post" action="/action/delete-session">
+      <input type="hidden" name="csrf_token" value="{_escape(csrf_token)}">
+      <input type="hidden" name="session" value="" data-delete-session>
+      <div class="delete-summary">
+        <strong data-delete-title></strong>
+        <p data-delete-note></p>
+      </div>
+      <div class="delete-impact">
+        <span><b data-delete-blocks>0</b>{_i18n("Wiki blocks removed", "撤回的 Wiki 内容块")}</span>
+        <span><b data-delete-files>0</b>{_i18n("Wiki files changed", "会修改的 Wiki 文件")}</span>
+        <span><b data-delete-shared>0</b>{_i18n("Shared files preserved", "保留共同内容的文件")}</span>
+      </div>
+      <div class="privacy-note">{_i18n("The raw conversation, drafts, and review records move to .vibewiki/trash/. Content supported by other conversations stays in place.", "原始对话、草稿和审核记录会移入 .vibewiki/trash/；由其他对话共同支持的内容会保留。")}</div>
+      <div class="settings-actions">
+        <button type="button" data-delete-close>{_i18n("Cancel", "取消")}</button>
+        <button class="danger" type="submit">{_i18n("Move to Trash", "移到回收站")}</button>
       </div>
     </form>
   </dialog>
@@ -898,6 +1025,46 @@ def render_control_center(
         tabPanels.forEach((panel) => panel.hidden = panel.dataset.tabPanel !== selected);
       }}));
 
+      const conversationSearch = document.querySelector("[data-conversation-search]");
+      const conversationRows = Array.from(document.querySelectorAll("[data-conversation-row]"));
+      const conversationEmpty = document.querySelector("[data-conversation-empty]");
+      conversationSearch?.addEventListener("input", () => {{
+        const query = (conversationSearch.value || "").trim().toLocaleLowerCase();
+        let visible = 0;
+        conversationRows.forEach((row) => {{
+          const matches = !query || (row.dataset.search || "").toLocaleLowerCase().includes(query);
+          row.hidden = !matches;
+          if (matches) visible += 1;
+        }});
+        conversationEmpty?.classList.toggle("visible", conversationRows.length > 0 && visible === 0);
+      }});
+
+      const deleteDialog = document.querySelector("[data-delete-dialog]");
+      const deleteSession = document.querySelector("[data-delete-session]");
+      const deleteTitle = document.querySelector("[data-delete-title]");
+      const deleteNote = document.querySelector("[data-delete-note]");
+      const deleteBlocks = document.querySelector("[data-delete-blocks]");
+      const deleteFiles = document.querySelector("[data-delete-files]");
+      const deleteShared = document.querySelector("[data-delete-shared]");
+      document.querySelectorAll("[data-delete-trigger]").forEach((button) => button.addEventListener("click", () => {{
+        if (deleteSession) deleteSession.value = button.dataset.session || "";
+        if (deleteTitle) deleteTitle.textContent = button.dataset.title || button.dataset.session || "";
+        if (deleteBlocks) deleteBlocks.textContent = button.dataset.blocks || "0";
+        if (deleteFiles) deleteFiles.textContent = button.dataset.files || "0";
+        if (deleteShared) deleteShared.textContent = button.dataset.shared || "0";
+        if (deleteNote) {{
+          const draftCount = button.dataset.drafts || "0";
+          deleteNote.textContent = document.documentElement.lang === "zh"
+            ? `这段对话及其 ${{draftCount}} 个已保存草稿文件将从当前项目移出。`
+            : `This conversation and its ${{draftCount}} stored draft files will leave the active project.`;
+        }}
+        if (deleteDialog && typeof deleteDialog.showModal === "function") deleteDialog.showModal();
+      }}));
+      document.querySelectorAll("[data-delete-close]").forEach((button) => button.addEventListener("click", () => deleteDialog?.close()));
+      deleteDialog?.addEventListener("click", (event) => {{
+        if (event.target === deleteDialog) deleteDialog.close();
+      }});
+
       document.querySelectorAll("[data-copy-result]").forEach((button) => button.addEventListener("click", async () => {{
         const output = document.querySelector("[data-result-output]");
         if (!output) return;
@@ -958,10 +1125,10 @@ def serve_control_center(
             parsed = urlparse(self.path)
             try:
                 data = self._read_form()
-                if parsed.path == "/action/model-settings" and not secrets.compare_digest(
+                if parsed.path in {"/action/model-settings", "/action/delete-session"} and not secrets.compare_digest(
                     _value(data, "csrf_token"), model_settings_token
                 ):
-                    self.send_error(403, "Invalid model-settings form token")
+                    self.send_error(403, "Invalid control-center form token")
                     return
                 if parsed.path in REVIEW_ACTIONS:
                     patch_dir = _patch_dir(root, _value(data, "patch"))
@@ -1110,7 +1277,7 @@ def perform_console_action(
         if generated:
             message += "; memory draft generated"
             message_zh += "，并已生成记忆草稿"
-        return ConsoleActionResult(message, message_zh, anchor="work")
+        return ConsoleActionResult(message, message_zh, anchor="add")
 
     if path == "/action/import-url":
         url = _value(data, "url")
@@ -1128,7 +1295,7 @@ def perform_console_action(
         if generated:
             message += "; memory draft generated"
             message_zh += "，并已生成记忆草稿"
-        return ConsoleActionResult(message, message_zh, anchor="work")
+        return ConsoleActionResult(message, message_zh, anchor="add")
 
     if path == "/action/capture":
         goal = _value(data, "goal")
@@ -1149,13 +1316,23 @@ def perform_console_action(
         if generated:
             message += "; memory draft generated"
             message_zh += "，并已生成记忆草稿"
-        return ConsoleActionResult(message, message_zh, anchor="work")
+        return ConsoleActionResult(message, message_zh, anchor="add")
 
     if path == "/action/distill":
         session_dir = _session_dir(root, _value(data, "session"))
         patches = distill_session(root, session_dir=session_dir)
         append_event(root, "distill", subject=patches.session_id, data={"patch_dir": str(patches.patch_dir)})
         return ConsoleActionResult("Memory draft generated", "记忆草稿已生成", anchor="work")
+
+    if path == "/action/delete-session":
+        session_id = _value(data, "session")
+        result = delete_conversation(root, session_id)
+        impact = result.impact
+        return ConsoleActionResult(
+            f"Conversation moved to Trash; {impact.memory_blocks} source-owned Wiki blocks removed, with shared memory preserved in {len(impact.shared_files)} files",
+            f"对话已移到回收站；撤回 {impact.memory_blocks} 个仅属于它的 Wiki 内容块，并在 {len(impact.shared_files)} 个文件中保留了共同记忆",
+            anchor="add",
+        )
 
     if path == "/action/merge":
         patch_dir = _patch_dir(root, _value(data, "patch"))
@@ -1339,6 +1516,66 @@ def _session_rows(data: DashboardData, merged_patches: set[str]) -> str:
     return "".join(rows)
 
 
+def _conversation_rows(root: Path, conversations: list[ConversationRecord]) -> str:
+    rows: list[str] = []
+    status_labels = {
+        "captured": ("captured", "已记录"),
+        "candidate": ("candidate", "候选"),
+        "approved": ("approved", "已批准"),
+        "merged": ("merged", "已合并"),
+    }
+    for conversation in conversations:
+        impact = plan_conversation_deletion(root, conversation.session_id)
+        state, state_zh = status_labels.get(
+            conversation.status,
+            (conversation.status, conversation.status),
+        )
+        status_class = conversation.status if conversation.status in {"candidate", "approved", "merged"} else ""
+        search = " ".join(
+            (
+                conversation.title,
+                conversation.preview,
+                conversation.recorded_by,
+                conversation.source,
+                conversation.session_id,
+            )
+        )
+        rows.append(
+            f'<article class="conversation-row" data-conversation-row data-search="{_escape(search)}">'
+            f'<div class="conversation-copy"><div class="conversation-title-line"><strong>{_escape(conversation.title)}</strong>'
+            f'<time datetime="{_escape(conversation.created_at)}">{_escape(_conversation_date(conversation.created_at))}</time></div>'
+            f'<p class="conversation-preview">{_escape(conversation.preview)}</p><div class="conversation-meta">'
+            f'<span class="status {status_class}">{_i18n(state, state_zh)}</span>'
+            f'<span>{_conversation_source(conversation.source)}</span><span>@{_escape(conversation.recorded_by)}</span></div></div>'
+            f'<button class="delete-trigger" type="button" data-delete-trigger '
+            f'data-session="{_escape(conversation.session_id)}" data-title="{_escape(conversation.title)}" '
+            f'data-blocks="{impact.memory_blocks}" data-files="{len(impact.memory_files)}" '
+            f'data-shared="{len(impact.shared_files)}" data-drafts="{impact.candidate_files}" '
+            f'title="Remove conversation" aria-label="Remove conversation">{_icon("trash")}'
+            f'<span class="visually-hidden">{_i18n("Remove conversation", "删除对话")}</span></button></article>'
+        )
+    return "".join(rows)
+
+
+def _conversation_date(value: str) -> str:
+    if not value:
+        return "-"
+    return value.replace("T", " ")[:16]
+
+
+def _conversation_source(value: str) -> str:
+    translations = {
+        "Quick result": "快速记录",
+        "Pasted Markdown": "粘贴的 Markdown",
+        "ChatGPT share": "ChatGPT 分享",
+        "Claude share": "Claude 分享",
+        "Shared link": "分享链接",
+        "Markdown file": "Markdown 文件",
+    }
+    translated = translations.get(value)
+    return _i18n(value, translated) if translated else _escape(value)
+
+
 def _memory_rows(cards: list[object], root: Path) -> str:
     rows: list[str] = []
     for card in cards:
@@ -1447,6 +1684,9 @@ def _icon(name: str) -> str:
         "book": '<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2Z"/>',
         "refresh": '<path d="M20 6v5h-5"/><path d="M4 18v-5h5"/><path d="M18.2 9A7 7 0 0 0 6.1 6.6L4 11M20 13l-2.1 4.4A7 7 0 0 1 5.8 15"/>',
         "message": '<path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4v8Z"/>',
+        "messages": '<path d="M21 15a4 4 0 0 1-4 4H9l-5 3v-5a4 4 0 0 1-1-2V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4v8Z"/><path d="M8 8h8M8 12h5"/>',
+        "search": '<circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/>',
+        "trash": '<path d="M3 6h18M8 6V4h8v2M19 6l-1 15H6L5 6M10 11v5M14 11v5"/>',
         "cpu": '<rect width="14" height="14" x="5" y="5" rx="2"/><path d="M9 9h6v6H9zM9 1v4M15 1v4M9 19v4M15 19v4M19 9h4M19 14h4M1 9h4M1 14h4"/>',
         "arrow": '<path d="m5 12 14-7-4 14-3-6-7-1Z"/><path d="m12 13 7-8"/>',
         "settings": '<path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.8 2.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6v.2h-4V21a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1L4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9A1.7 1.7 0 0 0 3 14H2.8v-4H3a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9L4.2 7 7 4.2l.1.1A1.7 1.7 0 0 0 9 4.6 1.7 1.7 0 0 0 10 3V2.8h4V3a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1L19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.2v4H21a1.7 1.7 0 0 0-1.6 1Z"/>',

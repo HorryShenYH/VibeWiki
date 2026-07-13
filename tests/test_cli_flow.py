@@ -12,6 +12,7 @@ from unittest.mock import patch
 from vibewiki.capture import capture_session
 from vibewiki.cli import build_parser, run as run_cli
 from vibewiki.control_center import perform_console_action, render_control_center
+from vibewiki.conversations import delete_conversation, plan_conversation_deletion
 from vibewiki.dashboard import generate_dashboard
 from vibewiki.distill import distill_session
 from vibewiki.events import read_events
@@ -74,6 +75,7 @@ class VibeWikiFlowTest(unittest.TestCase):
             self.assertTrue((root / ".vibewiki" / "events.jsonl").exists())
             self.assertIn(".vibewiki/cache/", (root / ".gitignore").read_text(encoding="utf-8"))
             self.assertIn(".vibewiki/inbox/", (root / ".gitignore").read_text(encoding="utf-8"))
+            self.assertIn(".vibewiki/trash/", (root / ".gitignore").read_text(encoding="utf-8"))
             config_text = (root / ".vibewiki" / "config.yaml").read_text(encoding="utf-8")
             self.assertIn("scope: project", config_text)
             self.assertIn("mode: bilingual", config_text)
@@ -919,6 +921,105 @@ All retry regression tests passed.
             self.assertIn("Fix API Retry Policy", populated_html)
             self.assertIn(f'/review?patch={patches[0].name}', populated_html)
             self.assertIn('name="patch"', render_review_ui(root, patch_dir=patches[0]))
+
+    def test_control_center_lists_every_conversation_with_safe_delete_preview(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            init_project(root)
+            for index in range(10):
+                capture_session(
+                    root,
+                    goal=f"Conversation {index}",
+                    outcome=f"Result {index}",
+                    session_name=f"conversation-{index}",
+                )
+
+            rendered = render_control_center(root, csrf_token="form-token")
+
+            self.assertEqual(rendered.count('<article class="conversation-row"'), 10)
+            self.assertIn("Conversation library", rendered)
+            self.assertIn("data-conversation-search", rendered)
+            self.assertIn("data-delete-dialog", rendered)
+            self.assertIn('action="/action/delete-session"', rendered)
+            self.assertIn('value="form-token"', rendered)
+
+    def test_delete_conversation_preserves_memory_supported_by_another_session(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            init_project(root)
+            first = capture_session(root, goal="First source", session_name="first-source")
+            second = capture_session(root, goal="Second source", session_name="second-source")
+
+            for session, detail in ((first, "first detail"), (second, "second detail")):
+                patch_dir = root / ".vibewiki" / "patches" / session.session_id
+                (patch_dir / "skilllets").mkdir(parents=True)
+                (patch_dir / "knowledge_patch.md").write_text(
+                    f"# Knowledge Patch\n\nStatus: candidate\nSession: {session.session_id}\n\n## Summary\n\n{detail}\n",
+                    encoding="utf-8",
+                )
+                (patch_dir / "skill_patch.md").write_text(
+                    f"# Session Skill\n\nStatus: candidate\nSession: {session.session_id}\n",
+                    encoding="utf-8",
+                )
+                (patch_dir / "agent_rule_patch.md").write_text(
+                    f"## Rule from {session.session_id}\n\nKeep {detail}.\n",
+                    encoding="utf-8",
+                )
+                (patch_dir / "skilllets" / "shared-procedure.md").write_text(
+                    f"# Skilllet: Shared Procedure\n\nStatus: candidate\nKind: skilllet\nSession: {session.session_id}\n\n## Summary\n\n{detail}\n",
+                    encoding="utf-8",
+                )
+                review_patches(root, patch_dir=patch_dir, approve=True)
+                merge_patches(root, patch_dir=patch_dir)
+
+            shared_skill = root / "skills" / "skilllets" / "shared-procedure.md"
+            shared_index = root / "skills" / "skilllets" / "index.md"
+            before = shared_skill.read_text(encoding="utf-8")
+            self.assertIn(first.session_id, before)
+            self.assertIn(second.session_id, before)
+            self.assertIn("<!-- /vibewiki:", before)
+
+            item_review = (
+                root / ".vibewiki" / "reviews" / f"{first.session_id}.items.json"
+            )
+            item_review.write_text('{"items": {}}\n', encoding="utf-8")
+            impact = plan_conversation_deletion(root, first.session_id)
+            self.assertIn("skills/skilllets/shared-procedure.md", impact.shared_files)
+            self.assertEqual(impact.review_files, 2)
+            result = delete_conversation(root, first.session_id)
+
+            after = shared_skill.read_text(encoding="utf-8")
+            self.assertNotIn(first.session_id, after)
+            self.assertIn(second.session_id, after)
+            self.assertTrue(shared_index.exists())
+            self.assertIn("shared-procedure", shared_index.read_text(encoding="utf-8"))
+            registry = (root / ".vibewiki" / "skill_registry.yaml").read_text(
+                encoding="utf-8"
+            )
+            self.assertNotIn(f"- {first.session_id}", registry)
+            self.assertIn(f"- {second.session_id}", registry)
+            self.assertFalse(first.session_dir.exists())
+            self.assertTrue((result.trash_dir / "session" / "session.md").exists())
+            self.assertTrue((result.trash_dir / "manifest.json").exists())
+            self.assertTrue(
+                (result.trash_dir / "reviews" / item_review.name).exists()
+            )
+            self.assertTrue(
+                (
+                    result.trash_dir
+                    / "memory_before_delete"
+                    / "skills"
+                    / "skilllets"
+                    / "shared-procedure.md"
+                ).exists()
+            )
+
+            delete_conversation(root, second.session_id)
+            self.assertFalse(shared_skill.exists())
+            self.assertNotIn(
+                "shared-procedure",
+                shared_index.read_text(encoding="utf-8"),
+            )
 
     def test_review_plan_triages_raw_candidates(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

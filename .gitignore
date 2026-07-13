@@ -20,6 +20,7 @@ dist/
 .vibewiki/patches/
 .vibewiki/reviews/
 .vibewiki/inbox/
+.vibewiki/trash/
 .vibewiki/cache/
 .vibewiki/private/
 .vibewiki/events.jsonl

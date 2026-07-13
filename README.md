@@ -136,6 +136,8 @@ guided personal/project Wiki setup or an initial project brief.
 The control center is the primary interface:
 
 - paste a conversation or import a shared link
+- browse and search every imported conversation in one library
+- remove a conversation with a Wiki impact preview and recoverable Trash archive
 - generate and review candidate memory
 - ask questions or build context for the next AI agent
 
@@ -310,6 +312,20 @@ vibewiki setup --scope personal --wiki-path ~/VibeWikiPersonal --no-understand
 create a normalized `session.md` with detected title, outcome signals, commands,
 verification hints, and benchmark hints. Treat the normalized fields as a review
 draft, not as final truth.
+
+The **Chats** view keeps import on the left and the complete conversation library
+on the right. Conversations are recent-first, searchable by title, outcome,
+source, or recorder, and show whether their memory is captured, candidate,
+approved, or merged.
+
+Removing a conversation is provenance-aware. Before deletion, VibeWiki shows how
+many Wiki blocks and files will change. Raw evidence, candidate patches, and
+review records move to `.vibewiki/trash/`; only Markdown blocks carrying that
+conversation's source marker are withdrawn. If another conversation also
+contributed to the same Wiki page or skill, its independently marked content and
+registry evidence remain in place.
+
+![VibeWiki conversation import and provenance-aware conversation library](docs/assets/conversation-library.png)
 
 `review-board` writes a static `review_board.html` beside the selected patch. It
 groups findings, candidate skilllets, prompt patterns, workflows, open
