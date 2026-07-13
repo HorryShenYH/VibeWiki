@@ -1,4 +1,6 @@
-# VibeWiki
+<p align="center">
+  <img alt="VibeWiki" src="docs/assets/logo-wordmark.svg" width="680">
+</p>
 
 <p align="center">
   <a href="https://github.com/HorryShenYH/VibeWiki/actions/workflows/tests.yml"><img alt="Tests" src="https://github.com/HorryShenYH/VibeWiki/actions/workflows/tests.yml/badge.svg"></a>
@@ -7,6 +9,8 @@
   <img alt="Local first" src="https://img.shields.io/badge/local--first-yes-e9c46a">
   <img alt="Review first" src="https://img.shields.io/badge/review--first-memory-e76f51">
 </p>
+
+# VibeWiki
 
 <p align="center">
   <strong>The reviewed memory layer for AI coding agents.</strong>
