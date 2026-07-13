@@ -4,6 +4,7 @@ from dataclasses import dataclass
 import html
 from http.server import BaseHTTPRequestHandler
 from pathlib import Path
+import secrets
 import socketserver
 from urllib.parse import parse_qs, urlencode, urlparse
 import uuid
@@ -14,7 +15,13 @@ from .distill import distill_session, parse_sections
 from .events import append_event, read_events
 from .import_markdown import import_markdown_session
 from .import_url import import_url_session
-from .llm import llm_settings
+from .llm import (
+    chat_completion,
+    clear_local_llm_settings,
+    llm_settings,
+    read_local_llm_settings,
+    save_local_llm_settings,
+)
 from .merge import merge_patches
 from .project import ensure_workspace
 from .project_understanding import build_project_brief, render_project_brief_markdown
@@ -52,6 +59,7 @@ def render_control_center(
     result_title: str = "",
     result_title_zh: str = "",
     result_text: str = "",
+    csrf_token: str = "",
 ) -> str:
     root = project.resolve()
     ensure_workspace(root)
@@ -64,6 +72,44 @@ def render_control_center(
         base_url_env=config.llm_base_url_env,
         api_key_env=config.llm_api_key_env,
         model_env=config.llm_model_env,
+        project=root,
+    )
+    local_llm = read_local_llm_settings(root)
+    form_llm = local_llm or configured_llm
+    form_provider = form_llm.provider if form_llm else "minimax"
+    form_base_url = form_llm.base_url if form_llm else "https://api.minimaxi.com/v1"
+    form_model = form_llm.model if form_llm else "MiniMax-M2.7"
+    llm_status_en = f"{configured_llm.model} configured" if configured_llm else "Local mode"
+    llm_status_zh = f"已配置 {configured_llm.model}" if configured_llm else "本地模式"
+    llm_source_en = (
+        "Managed by environment variables"
+        if configured_llm and configured_llm.source == "environment"
+        else "Stored only in this project"
+        if local_llm
+        else "No model API configured"
+    )
+    llm_source_zh = (
+        "由环境变量管理"
+        if configured_llm and configured_llm.source == "environment"
+        else "仅保存在当前项目"
+        if local_llm
+        else "尚未配置模型 API"
+    )
+    api_key_placeholder_en = (
+        "Saved; leave blank to keep it"
+        if local_llm and local_llm.api_key
+        else "API key (optional for local models)"
+    )
+    api_key_placeholder_zh = (
+        "已保存；留空则保留"
+        if local_llm and local_llm.api_key
+        else "API Key（本地模型可留空）"
+    )
+    disconnect_button = (
+        f'<button class="disconnect" type="submit" name="settings_action" value="disconnect" formnovalidate>'
+        f'{_i18n("Disconnect", "断开连接")}</button>'
+        if local_llm
+        else ""
     )
     latest_cards = sorted(data.cards, key=lambda card: card.source.as_posix(), reverse=True)[:6]
     session_rows = _session_rows(data, merged_patches)
@@ -411,6 +457,8 @@ def render_control_center(
     .language button {{ min-width: 34px; min-height: 26px; font-size: 10px; }}
     .icon-button {{ width: 34px; min-width: 34px; min-height: 34px; padding: 0; display: grid; place-items: center; }}
     .icon-button svg {{ width: 15px; height: 15px; }}
+    .settings-trigger {{ border-color: transparent; background: transparent; }}
+    .settings-trigger:hover {{ border-color: var(--line); background: #fff; }}
     .main {{ width: 100%; max-width: 1180px; margin: 0 auto; padding: 40px 30px 72px; }}
     .message {{ max-width: 980px; margin: 0 auto 22px; }}
     [data-view-panel] {{ display: none; }}
@@ -485,6 +533,33 @@ def render_control_center(
     .memory-meta {{ flex-wrap: wrap; }}
     .bar-row {{ grid-template-columns: 90px minmax(0,1fr) 24px; }}
     details.advanced summary {{ padding: 14px 20px; }}
+    .model-dialog {{
+      width: min(560px, calc(100vw - 32px));
+      max-height: calc(100vh - 40px);
+      padding: 0;
+      border: 1px solid rgba(22, 23, 25, .12);
+      border-radius: 8px;
+      background: #fff;
+      color: var(--ink);
+      box-shadow: 0 28px 90px rgba(15, 23, 29, .20), 0 3px 12px rgba(15, 23, 29, .10);
+      overflow: auto;
+    }}
+    .model-dialog::backdrop {{ background: rgba(22, 25, 29, .34); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); }}
+    .settings-head {{ display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; padding: 22px 24px 18px; border-bottom: 1px solid var(--line); }}
+    .settings-head h2 {{ margin: 0; font-size: 20px; font-weight: 700; }}
+    .settings-head p {{ margin: 5px 0 0; color: var(--muted); font-size: 11px; }}
+    .settings-close {{ width: 32px; min-width: 32px; min-height: 32px; padding: 0; display: grid; place-items: center; border-color: transparent; background: transparent; }}
+    .settings-close svg {{ width: 16px; height: 16px; }}
+    .settings-body {{ display: grid; gap: 15px; padding: 20px 24px 24px; }}
+    .api-state {{ display: flex; align-items: center; gap: 9px; padding-bottom: 2px; color: var(--muted); font-size: 11px; }}
+    .api-state i {{ width: 7px; height: 7px; flex: 0 0 auto; border-radius: 50%; background: #a6a8ab; }}
+    .api-state.configured i {{ background: #24a06f; box-shadow: 0 0 0 3px rgba(36,160,111,.10); }}
+    .settings-grid {{ display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }}
+    .settings-grid .wide {{ grid-column: 1 / -1; }}
+    .secret-hint {{ margin: -8px 0 0; color: var(--subtle); font-size: 10px; }}
+    .privacy-note {{ padding: 11px 12px; border-left: 2px solid #38a58d; background: #f4f8f7; color: #52615e; font-size: 10px; }}
+    .settings-actions {{ display: flex; align-items: center; justify-content: flex-end; gap: 8px; padding-top: 2px; }}
+    .settings-actions .disconnect {{ margin-right: auto; color: var(--danger); }}
 
     @media (max-width: 900px) {{
       .sidebar {{ height: auto; min-height: 64px; grid-template-columns: auto 1fr auto; gap: 12px; padding: 9px 16px; }}
@@ -514,6 +589,7 @@ def render_control_center(
       .form-grid {{ grid-template-columns: 1fr; }}
       .queue-row {{ grid-template-columns: 1fr auto; }}
       .queue-row .status {{ display: none; }}
+      .model-dialog {{ width: min(560px, calc(100vw - 24px)); }}
     }}
     @media (max-width: 430px) {{
       .brand small, .language {{ display: none; }}
@@ -528,6 +604,11 @@ def render_control_center(
       .panel-head, .panel-body {{ padding-left: 15px; padding-right: 15px; }}
       .queue-row {{ grid-template-columns: 1fr; }}
       .row-actions {{ justify-content: flex-start; }}
+      .settings-head, .settings-body {{ padding-left: 17px; padding-right: 17px; }}
+      .settings-grid {{ grid-template-columns: 1fr; }}
+      .settings-grid .wide {{ grid-column: 1; }}
+      .settings-actions {{ flex-wrap: wrap; }}
+      .settings-actions .disconnect {{ width: 100%; margin-right: 0; order: 3; }}
     }}
   </style>
 </head>
@@ -557,7 +638,7 @@ def render_control_center(
           <button type="button" data-lang-choice="en" aria-pressed="true">EN</button>
           <button type="button" data-lang-choice="zh" aria-pressed="false">中文</button>
         </div>
-        <a class="button quiet icon-button" href="/" title="Refresh" aria-label="Refresh">{_icon("refresh")}</a>
+        <button class="quiet icon-button settings-trigger" type="button" data-settings-open title="Model settings" aria-label="Model settings">{_icon("settings")}</button>
       </div>
     </aside>
 
@@ -571,7 +652,7 @@ def render_control_center(
             <h1>{_i18n("Ask VibeWiki", "问问 VibeWiki")}</h1>
             <p>{_escape(data.project_name)}</p>
           </div>
-          <span class="connection">{_i18n("LLM connected" if configured_llm else "Local mode", "LLM 已连接" if configured_llm else "本地模式")}</span>
+          <button class="connection" type="button" data-settings-open>{_i18n(llm_status_en, llm_status_zh)}</button>
         </div>
         <div class="query-switch" role="tablist">
           <button class="active" type="button" data-query-mode="answer" aria-selected="true">{_icon("message")}{_i18n("Answer", "回答")}</button>
@@ -688,6 +769,44 @@ def render_control_center(
       </section>
     </main>
   </div>
+  <dialog class="model-dialog" data-model-dialog aria-labelledby="model-settings-title">
+    <div class="settings-head">
+      <div>
+        <h2 id="model-settings-title">{_i18n("Model API", "模型 API")}</h2>
+        <p>{_i18n("Use a small model to turn project memory into concise answers.", "使用小模型把项目记忆整理成简洁回答。")}</p>
+      </div>
+      <button class="settings-close" type="button" data-settings-close title="Close" aria-label="Close">{_icon("x")}</button>
+    </div>
+    <form class="settings-body" method="post" action="/action/model-settings">
+      <input type="hidden" name="csrf_token" value="{_escape(csrf_token)}">
+      <div class="api-state {'configured' if configured_llm else ''}"><i></i>{_i18n(llm_source_en, llm_source_zh)}</div>
+      <div class="settings-grid">
+        <label>{_i18n("Provider", "服务商")}
+          <select name="provider" data-provider-select>
+            <option value="minimax"{' selected' if form_provider == 'minimax' else ''}>MiniMax</option>
+            <option value="openai"{' selected' if form_provider == 'openai' else ''}>OpenAI</option>
+            <option value="compatible"{' selected' if form_provider == 'compatible' else ''}>{_escape("OpenAI-compatible / Local")}</option>
+          </select>
+        </label>
+        <label>{_i18n("Model", "模型")}
+          <input required name="model" value="{_escape(form_model)}" data-model-input placeholder="MiniMax-M2.7" autocomplete="off">
+        </label>
+        <label class="wide">{_i18n("Base URL", "Base URL")}
+          <input required type="url" name="base_url" value="{_escape(form_base_url)}" data-base-url-input placeholder="https://api.example.com/v1" autocomplete="url">
+        </label>
+        <label class="wide">{_i18n("API Key", "API Key")}
+          <input type="password" name="api_key" data-placeholder-en="{_escape(api_key_placeholder_en)}" data-placeholder-zh="{_escape(api_key_placeholder_zh)}" placeholder="{_escape(api_key_placeholder_en)}" autocomplete="new-password" spellcheck="false">
+        </label>
+      </div>
+      <p class="secret-hint">{_i18n("The key is never shown again. A blank field keeps the saved key.", "密钥不会再次显示；留空会保留已保存的密钥。")}</p>
+      <div class="privacy-note">{_i18n("Stored locally with 0600 permissions under .vibewiki/private/ and excluded from Git.", "配置以 0600 权限保存在 .vibewiki/private/，并已排除在 Git 之外。")}</div>
+      <div class="settings-actions">
+        {disconnect_button}
+        <button type="submit" name="settings_action" value="save">{_i18n("Save", "保存")}</button>
+        <button class="primary" type="submit" name="settings_action" value="test">{_i18n("Save & test", "保存并测试")}</button>
+      </div>
+    </form>
+  </dialog>
   <script>
     (() => {{
       const languageButtons = Array.from(document.querySelectorAll("[data-lang-choice]"));
@@ -734,6 +853,29 @@ def render_control_center(
       window.addEventListener("hashchange", () => setView(location.hash.slice(1)));
       setView(location.hash.slice(1));
 
+      const settingsDialog = document.querySelector("[data-model-dialog]");
+      document.querySelectorAll("[data-settings-open]").forEach((button) => button.addEventListener("click", () => {{
+        if (settingsDialog && typeof settingsDialog.showModal === "function") settingsDialog.showModal();
+      }}));
+      document.querySelectorAll("[data-settings-close]").forEach((button) => button.addEventListener("click", () => settingsDialog?.close()));
+      settingsDialog?.addEventListener("click", (event) => {{
+        if (event.target === settingsDialog) settingsDialog.close();
+      }});
+
+      const providerSelect = document.querySelector("[data-provider-select]");
+      const baseUrlInput = document.querySelector("[data-base-url-input]");
+      const modelInput = document.querySelector("[data-model-input]");
+      const providerPresets = {{
+        minimax: {{ baseUrl: "https://api.minimaxi.com/v1", model: "MiniMax-M2.7" }},
+        openai: {{ baseUrl: "https://api.openai.com/v1", model: "gpt-4.1-mini" }},
+      }};
+      providerSelect?.addEventListener("change", () => {{
+        const preset = providerPresets[providerSelect.value];
+        if (!preset) return;
+        if (baseUrlInput) baseUrlInput.value = preset.baseUrl;
+        if (modelInput) modelInput.value = preset.model;
+      }});
+
       const queryModeButtons = Array.from(document.querySelectorAll("[data-query-mode]"));
       const queryPanels = Array.from(document.querySelectorAll("[data-query-panel]"));
       queryModeButtons.forEach((button) => button.addEventListener("click", () => {{
@@ -777,6 +919,7 @@ def serve_control_center(
 ) -> None:
     root = project.resolve()
     ensure_workspace(root)
+    model_settings_token = secrets.token_urlsafe(32)
 
     class ControlCenterHandler(BaseHTTPRequestHandler):
         def do_GET(self) -> None:  # noqa: N802
@@ -788,6 +931,7 @@ def serve_control_center(
                         root,
                         message=_value(query, "message"),
                         message_zh=_value(query, "message_zh"),
+                        csrf_token=model_settings_token,
                     )
                 )
                 return
@@ -814,6 +958,11 @@ def serve_control_center(
             parsed = urlparse(self.path)
             try:
                 data = self._read_form()
+                if parsed.path == "/action/model-settings" and not secrets.compare_digest(
+                    _value(data, "csrf_token"), model_settings_token
+                ):
+                    self.send_error(403, "Invalid model-settings form token")
+                    return
                 if parsed.path in REVIEW_ACTIONS:
                     patch_dir = _patch_dir(root, _value(data, "patch"))
                     result = perform_review_action(
@@ -846,6 +995,7 @@ def serve_control_center(
                             result_title=result.result_title,
                             result_title_zh=result.result_title_zh,
                             result_text=result.result_text,
+                            csrf_token=model_settings_token,
                         )
                     )
                     return
@@ -856,6 +1006,7 @@ def serve_control_center(
                         root,
                         message=f"Error: {exc}",
                         message_zh=f"错误：{exc}",
+                        csrf_token=model_settings_token,
                     ),
                     status=400,
                 )
@@ -1051,6 +1202,74 @@ def perform_console_action(
             result_text=context,
         )
 
+    if path == "/action/model-settings":
+        action = _value(data, "settings_action") or "save"
+        if action == "disconnect":
+            removed = clear_local_llm_settings(root)
+            config = load_retrieval_config(root)
+            active = llm_settings(
+                base_url_env=config.llm_base_url_env,
+                api_key_env=config.llm_api_key_env,
+                model_env=config.llm_model_env,
+                project=root,
+            )
+            append_event(root, "llm-settings", subject="disconnect", data={"source": "ui"})
+            if active:
+                return ConsoleActionResult(
+                    "Local model settings removed; environment settings are still active",
+                    "本地模型配置已移除，环境变量配置仍然生效",
+                    anchor="ask",
+                )
+            return ConsoleActionResult(
+                "Model API disconnected" if removed else "No local model API was configured",
+                "模型 API 已断开" if removed else "当前没有本地模型 API 配置",
+                anchor="ask",
+            )
+
+        settings = save_local_llm_settings(
+            root,
+            provider=_value(data, "provider"),
+            base_url=_value(data, "base_url"),
+            model=_value(data, "model"),
+            api_key=_value(data, "api_key"),
+        )
+        append_event(
+            root,
+            "llm-settings",
+            subject=action,
+            data={"source": "ui", "provider": settings.provider, "model": settings.model},
+        )
+        if action == "test":
+            try:
+                response = chat_completion(
+                    settings,
+                    system="This is an API connection check. Reply with only OK.",
+                    user="Reply with OK.",
+                    timeout=30,
+                )
+            except RuntimeError as exc:
+                return ConsoleActionResult(
+                    f"Settings saved, but the connection test failed: {exc}",
+                    f"配置已保存，但连接测试失败：{exc}",
+                    anchor="ask",
+                )
+            if not response.strip():
+                return ConsoleActionResult(
+                    "Settings saved, but the model returned an empty response",
+                    "配置已保存，但模型返回了空响应",
+                    anchor="ask",
+                )
+            return ConsoleActionResult(
+                f"Model connected: {settings.model}",
+                f"模型连接成功：{settings.model}",
+                anchor="ask",
+            )
+        return ConsoleActionResult(
+            f"Model settings saved: {settings.model}",
+            f"模型配置已保存：{settings.model}",
+            anchor="ask",
+        )
+
     if path == "/action/understand":
         brief = build_project_brief(root)
         output = root / "docs" / "wiki" / "project_brief.md"
@@ -1230,6 +1449,8 @@ def _icon(name: str) -> str:
         "message": '<path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4v8Z"/>',
         "cpu": '<rect width="14" height="14" x="5" y="5" rx="2"/><path d="M9 9h6v6H9zM9 1v4M15 1v4M9 19v4M15 19v4M19 9h4M19 14h4M1 9h4M1 14h4"/>',
         "arrow": '<path d="m5 12 14-7-4 14-3-6-7-1Z"/><path d="m12 13 7-8"/>',
+        "settings": '<path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.8 2.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6v.2h-4V21a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1L4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9A1.7 1.7 0 0 0 3 14H2.8v-4H3a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9L4.2 7 7 4.2l.1.1A1.7 1.7 0 0 0 9 4.6 1.7 1.7 0 0 0 10 3V2.8h4V3a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1L19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.2v4H21a1.7 1.7 0 0 0-1.6 1Z"/>',
+        "x": '<path d="M18 6 6 18M6 6l12 12"/>',
     }
     body = paths.get(name, paths["sparkles"])
     return (

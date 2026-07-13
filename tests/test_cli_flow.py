@@ -17,7 +17,13 @@ from vibewiki.distill import distill_session
 from vibewiki.events import read_events
 from vibewiki.import_markdown import extract_hint_lines, import_markdown_session
 from vibewiki.import_url import chatgpt_share_to_markdown, html_to_markdown, import_url_session
-from vibewiki.llm import clean_chat_response, llm_settings
+from vibewiki.llm import (
+    clean_chat_response,
+    llm_settings,
+    local_llm_settings_path,
+    read_local_llm_settings,
+    save_local_llm_settings,
+)
 from vibewiki.merge import merge_patches
 from vibewiki.project import init_project
 from vibewiki.review import (
@@ -1046,7 +1052,7 @@ echo "# this stays code"
         assert settings is not None
         self.assertEqual(settings.base_url, "https://api.minimaxi.com/v1")
         self.assertEqual(settings.api_key, "minimax-token")
-        self.assertEqual(settings.model, "MiniMax-M1")
+        self.assertEqual(settings.model, "MiniMax-M2.7")
 
     def test_llm_settings_prefers_vibewiki_env(self) -> None:
         env = {
@@ -1069,6 +1075,83 @@ echo "# this stays code"
         self.assertEqual(settings.base_url, "http://local-llm/v1")
         self.assertEqual(settings.api_key, "local-token")
         self.assertEqual(settings.model, "local-model")
+
+    def test_local_llm_settings_are_private_masked_and_used(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            init_project(root)
+            saved = save_local_llm_settings(
+                root,
+                provider="minimax",
+                base_url="https://api.minimaxi.com/v1",
+                api_key="private-minimax-token",
+                model="MiniMax-M2.7",
+            )
+            path = local_llm_settings_path(root)
+
+            with patch.dict(os.environ, {}, clear=True):
+                resolved = llm_settings(
+                    base_url_env="VIBEWIKI_LLM_BASE_URL",
+                    api_key_env="VIBEWIKI_LLM_API_KEY",
+                    model_env="VIBEWIKI_LLM_MODEL",
+                    project=root,
+                )
+                rendered = render_control_center(root)
+
+            self.assertEqual(saved.source, "local")
+            self.assertIsNotNone(resolved)
+            assert resolved is not None
+            self.assertEqual(resolved.api_key, "private-minimax-token")
+            self.assertEqual(path.stat().st_mode & 0o777, 0o600)
+            self.assertIn('data-model-dialog', rendered)
+            self.assertIn('action="/action/model-settings"', rendered)
+            self.assertIn('name="csrf_token"', rendered)
+            self.assertIn("Saved; leave blank to keep it", rendered)
+            self.assertNotIn("private-minimax-token", rendered)
+
+    def test_control_center_saves_tests_and_disconnects_model_api(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            init_project(root)
+            with patch.dict(os.environ, {}, clear=True):
+                saved = perform_console_action(
+                    root,
+                    path="/action/model-settings",
+                    data={
+                        "settings_action": ["save"],
+                        "provider": ["compatible"],
+                        "base_url": ["http://127.0.0.1:11434/v1"],
+                        "model": ["small-local-model"],
+                        "api_key": ["local-secret"],
+                    },
+                )
+                with patch("vibewiki.control_center.chat_completion", return_value="OK") as mocked:
+                    tested = perform_console_action(
+                        root,
+                        path="/action/model-settings",
+                        data={
+                            "settings_action": ["test"],
+                            "provider": ["compatible"],
+                            "base_url": ["http://127.0.0.1:11434/v1"],
+                            "model": ["small-local-model"],
+                            "api_key": [""],
+                        },
+                    )
+                settings = read_local_llm_settings(root)
+                disconnected = perform_console_action(
+                    root,
+                    path="/action/model-settings",
+                    data={"settings_action": ["disconnect"]},
+                )
+
+            self.assertIn("settings saved", saved.message.lower())
+            self.assertIn("Model connected", tested.message)
+            self.assertTrue(mocked.called)
+            self.assertIsNotNone(settings)
+            assert settings is not None
+            self.assertEqual(settings.api_key, "local-secret")
+            self.assertIn("disconnected", disconnected.message)
+            self.assertFalse(local_llm_settings_path(root).exists())
 
     def test_clean_chat_response_removes_thinking_trace(self) -> None:
         cleaned = clean_chat_response(

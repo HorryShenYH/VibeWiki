@@ -447,7 +447,14 @@ export VIBEWIKI_EMBEDDING_API_KEY="..."
 export VIBEWIKI_EMBEDDING_MODEL="text-embedding-3-small"
 ```
 
-LLM answers use OpenAI-compatible chat completions:
+LLM answers use OpenAI-compatible chat completions. In the control center, open
+the model-settings button in the top-right corner to configure MiniMax, OpenAI,
+another compatible provider, or a keyless local model. VibeWiki stores that
+project-local secret under `.vibewiki/private/` with `0600` permissions and
+never renders the saved key back into the page.
+
+For terminals, CI, or centrally managed team environments, use environment
+variables instead. They take precedence over the local UI setting:
 
 ```bash
 export VIBEWIKI_LLM_BASE_URL="https://api.openai.com/v1"
@@ -463,7 +470,7 @@ MiniMax Token Plan can use its OpenAI-compatible endpoint directly:
 ```bash
 export VIBEWIKI_LLM_BASE_URL="https://api.minimaxi.com/v1"
 export VIBEWIKI_LLM_API_KEY="..."
-export VIBEWIKI_LLM_MODEL="MiniMax-M1"
+export VIBEWIKI_LLM_MODEL="MiniMax-M2.7"
 ```
 
 VibeWiki also recognizes the provider-style variables from MiniMax/OpenAI SDK
@@ -472,7 +479,7 @@ examples, so this works too:
 ```bash
 export OPENAI_BASE_URL="https://api.minimaxi.com/v1"
 export OPENAI_API_KEY="..."
-export OPENAI_MODEL="MiniMax-M1"
+export OPENAI_MODEL="MiniMax-M2.7"
 ```
 
 Or, for the shortest MiniMax setup:
@@ -480,7 +487,7 @@ Or, for the shortest MiniMax setup:
 ```bash
 export MINIMAX_API_KEY="..."
 # optional override
-export MINIMAX_MODEL="MiniMax-M1"
+export MINIMAX_MODEL="MiniMax-M2.7"
 ```
 
 Do not commit API keys. If you keep them in a local `.env`, source that file in

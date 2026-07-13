@@ -264,12 +264,13 @@ def _translate_with_llm(
         base_url_env=config.llm_base_url_env,
         api_key_env=config.llm_api_key_env,
         model_env=config.llm_model_env,
+        project=project,
     )
     if not settings:
         raise RuntimeError(
-            "No LLM API is configured. Set VIBEWIKI_LLM_BASE_URL, "
-            "VIBEWIKI_LLM_API_KEY, and VIBEWIKI_LLM_MODEL, or use a free "
-            "translation provider instead."
+            "No LLM API is configured. Open Model API in the VibeWiki control "
+            "center, set the VIBEWIKI_LLM_* environment variables, or use a "
+            "free translation provider instead."
         )
     system = (
         "You translate Markdown for a VibeWiki review display. "

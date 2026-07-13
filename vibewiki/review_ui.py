@@ -968,11 +968,13 @@ def revise_candidate_markdown(project: Path, *, body: str, instruction: str) -> 
         base_url_env=config.llm_base_url_env,
         api_key_env=config.llm_api_key_env,
         model_env=config.llm_model_env,
+        project=root,
     )
     if not settings:
         raise RuntimeError(
-            "No LLM API is configured. Set VIBEWIKI_LLM_BASE_URL, "
-            "VIBEWIKI_LLM_API_KEY, and VIBEWIKI_LLM_MODEL."
+            "No LLM API is configured. Open Model API in the VibeWiki control "
+            "center, or set VIBEWIKI_LLM_BASE_URL, VIBEWIKI_LLM_API_KEY, and "
+            "VIBEWIKI_LLM_MODEL."
         )
     system = (
         "You revise VibeWiki candidate memory Markdown for human review. "

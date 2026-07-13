@@ -21,6 +21,7 @@ dist/
 .vibewiki/reviews/
 .vibewiki/inbox/
 .vibewiki/cache/
+.vibewiki/private/
 .vibewiki/events.jsonl
 .vibewiki/dashboard.html
 .vibewiki/dashboard.png

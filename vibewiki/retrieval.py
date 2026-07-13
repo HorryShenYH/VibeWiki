@@ -310,6 +310,7 @@ def answer_question(
         base_url_env=config.llm_base_url_env,
         api_key_env=config.llm_api_key_env,
         model_env=config.llm_model_env,
+        project=root,
     )
     card_results = search_memory_cards(
         root,
