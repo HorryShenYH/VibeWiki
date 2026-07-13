@@ -12,7 +12,18 @@ license = { text = "MIT" }
 authors = [
   { name = "VibeWiki contributors" }
 ]
-keywords = ["ai-coding", "wiki", "agents", "developer-tools", "knowledge-management"]
+keywords = [
+  "ai-coding",
+  "agent-memory",
+  "agents",
+  "developer-tools",
+  "knowledge-management",
+  "llm",
+  "rag",
+  "team-wiki",
+  "vibe-coding",
+  "wiki",
+]
 classifiers = [
   "Development Status :: 3 - Alpha",
   "Environment :: Console",

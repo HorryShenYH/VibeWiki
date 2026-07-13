@@ -1,50 +1,65 @@
 # VibeWiki
 
-The reviewed memory layer for AI coding agents.
+<p align="center">
+  <a href="https://github.com/HorryShenYH/VibeWiki/actions/workflows/tests.yml"><img alt="Tests" src="https://github.com/HorryShenYH/VibeWiki/actions/workflows/tests.yml/badge.svg"></a>
+  <img alt="Python 3.10+" src="https://img.shields.io/badge/python-3.10%2B-457b9d">
+  <img alt="License MIT" src="https://img.shields.io/badge/license-MIT-2a9d8f">
+  <img alt="Local first" src="https://img.shields.io/badge/local--first-yes-e9c46a">
+  <img alt="Review first" src="https://img.shields.io/badge/review--first-memory-e76f51">
+</p>
 
-> Stop solving the same bug twice.
+<p align="center">
+  <strong>The reviewed memory layer for AI coding agents.</strong>
+</p>
 
-Use Codex, Claude Code, Cline, Aider, OpenHands, Cursor, or Copilot to code.
-Use Repomix, Gitingest, DeepWiki-style tools, or repo maps to understand a
-repository. Use VibeWiki to remember what actually worked.
+<p align="center">
+  Stop solving the same project-specific bug twice. VibeWiki turns successful
+  AI coding sessions into team knowledge, reusable skills, and compact context
+  packs for future agents.
+</p>
 
-AI coding is fast, but the useful knowledge often disappears into chat logs,
-temporary commands, diffs, and test output. VibeWiki turns those traces into
-reviewable findings, Wiki patches, composable skilllets, prompt patterns,
-workflows, and agent rules, then feeds them back into future development.
+![VibeWiki dashboard showing memory status, review funnel, and card type charts](docs/assets/dashboard.png)
 
-In plain words: VibeWiki is a project and personal memory compiler for AI
-coding. It can bootstrap a new project Wiki by quickly understanding the
-repository, then grow that Wiki from real vibe-coding conversations.
+## The 30-Second Pitch
 
-## Why VibeWiki?
+AI coding agents are great at the next edit. Teams still lose the lessons that
+made the edit work:
 
-Most AI coding tools are great at doing the next task. VibeWiki focuses on what
-happens after the task succeeds:
+- the exact command that reproduced a bug
+- the simulator setting that made a run valid
+- the workaround that should not become folklore
+- the proof that a fix was actually correct
+- the prompt pattern that made an agent useful
+
+VibeWiki compiles those traces into reviewed project memory:
 
 ```text
-conversation + commands + diff + tests + notes
--> candidate memory
+AI session + commands + diff + tests
+-> candidate memory cards
 -> human review
--> project/personal Wiki + skills + workflows + agent rules
+-> Wiki notes + skilllets + workflows + agent context packs
 ```
 
-VibeWiki does not replace the tools around it. It is designed to build on them:
+It is not another coding agent. It is the memory layer that lets Codex, Claude
+Code, Cursor, Cline, Aider, OpenHands, and future agents start with what your
+team already learned.
 
-| Tool family | Best at | VibeWiki adds |
+## Why It Stands Out
+
+| Common approach | What it gives you | What VibeWiki adds |
 | --- | --- | --- |
-| Repomix / Gitingest | packing repo context for LLMs | reviewed memory after coding |
-| DeepWiki / RepoAgent / CodeWiki-style tools | generating repo understanding | evidence-backed updates from real sessions |
-| Codex / Claude Code / Cline / Aider / OpenHands | doing coding work | preserving what worked and why |
-| Anthropic Skills / AGENTS.md / Cursor rules | executable agent instructions | generating and evolving instructions from evidence |
-| Obsidian / GitHub Wiki / Markdown docs | storing notes | compiling notes from AI collaboration |
+| RAG over docs | retrieve existing text | evidence-backed memory from real work |
+| Repo maps / DeepWiki-style docs | understand the current codebase | remember commands, failures, fixes, and decisions |
+| Agent rules / skills | static instructions | reviewed skill evolution from repeated sessions |
+| Chat history | raw conversation logs | compact memory cards with source, actor, and confidence |
+| Team wiki | manually written notes | a review-first compiler for AI collaboration traces |
 
 See [`docs/ecosystem.md`](docs/ecosystem.md) for the fuller ecosystem stance.
 
 ## Three-Minute Demo
 
 ```bash
-git clone https://github.com/<your-org>/VibeWiki.git
+git clone https://github.com/HorryShenYH/VibeWiki.git
 cd VibeWiki
 python3 -m pip install -e .
 
@@ -59,15 +74,17 @@ vibewiki review-board
 Then open `.vibewiki/dashboard.html` for the memory dashboard, or the generated
 review board under `.vibewiki/patches/<session>/`.
 
-## Interface Preview
-
-`vibewiki dashboard` generates a static, dependency-free HTML dashboard. It
-defaults to English for open-source demos and includes an `EN / 中文` switch in
-the page.
-
-![VibeWiki dashboard showing memory status, review funnel, and card type charts](docs/assets/dashboard.png)
-
 For the full walkthrough, see [`docs/demo.md`](docs/demo.md).
+
+## What You Get After One Session
+
+| Output | Human value | Agent value |
+| --- | --- | --- |
+| Memory cards | quick answers with source, actor, and confidence | compact facts instead of long chat logs |
+| Review dashboard | see candidate memory, backlog, and next command | exposes what is trusted vs still candidate |
+| Wiki patches | durable project notes | stable context for future tasks |
+| Skilllets and workflows | reusable team procedures | composable task instructions |
+| Context packs | share just enough background | JSON/YAML input for coding agents |
 
 `vibewiki setup` is the recommended first-run experience. It asks whether you
 want a project Wiki or personal Wiki, where to store it, and whether to generate
