@@ -3,7 +3,7 @@
 Logo idea:
 
 ```text
-reviewed memory cards + V mark + approval check
+minimal V mark + reviewed memory signal
 ```
 
 Files:

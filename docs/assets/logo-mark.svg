@@ -1,13 +1,8 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
   <title id="title">VibeWiki logo mark</title>
-  <desc id="desc">A V shaped stack of reviewed memory cards with a central wiki node.</desc>
-  <rect width="512" height="512" rx="96" fill="#F7FAF6"/>
-  <path d="M96 120c0-22 18-40 40-40h240c22 0 40 18 40 40v272c0 22-18 40-40 40H136c-22 0-40-18-40-40V120Z" fill="#FFFFFF" stroke="#D8E1DA" stroke-width="10"/>
-  <path d="M160 148h192" stroke="#2A9D8F" stroke-width="20" stroke-linecap="round"/>
-  <path d="M160 206h112" stroke="#E9C46A" stroke-width="20" stroke-linecap="round"/>
-  <path d="M160 264h150" stroke="#E76F51" stroke-width="20" stroke-linecap="round"/>
-  <path d="M138 150l88 214c6 15 28 15 34 0l88-214" fill="none" stroke="#17202A" stroke-width="44" stroke-linecap="round" stroke-linejoin="round"/>
-  <circle cx="256" cy="302" r="40" fill="#2A9D8F"/>
-  <path d="M239 302l12 12 25-28" fill="none" stroke="#FFFFFF" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
-  <path d="M356 320l38 38" stroke="#457B9D" stroke-width="24" stroke-linecap="round"/>
+  <desc id="desc">A clean V shaped mark for reviewed project memory.</desc>
+  <rect width="512" height="512" rx="112" fill="#F7FAF6"/>
+  <path d="M150 142L248 368" fill="none" stroke="#17202A" stroke-width="58" stroke-linecap="round"/>
+  <path d="M362 142L264 368" fill="none" stroke="#2A9D8F" stroke-width="58" stroke-linecap="round"/>
+  <circle cx="256" cy="380" r="18" fill="#E9C46A"/>
 </svg>
