@@ -326,6 +326,43 @@ python3 compare_outputs.py
             self.assertTrue(patches.skill_patch.exists())
             self.assertIn("make -C /work/VEMU/dsl all", patches.skill_patch.read_text(encoding="utf-8"))
 
+    def test_import_markdown_preserves_structured_session_sections(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = root / "api_retry_session.md"
+            source.write_text(
+                """# Fix Unsafe API Retries
+
+## Final Outcome
+
+Retries now apply only to idempotent methods.
+POST requires an idempotency key.
+
+## Tests / Verification
+
+- GET retry test passed
+- POST duplicate-write regression test passed
+
+## User Notes
+
+Preserve the reason behind the policy.
+
+## Things Not To Record
+
+Do not keep temporary logging as guidance.
+""",
+                encoding="utf-8",
+            )
+
+            session = import_markdown_session(root, source)
+            session_text = session.session_md.read_text(encoding="utf-8")
+
+            self.assertIn("Retries now apply only to idempotent methods.", session_text)
+            self.assertIn("POST requires an idempotency key.", session_text)
+            self.assertIn("GET retry test passed", session_text)
+            self.assertIn("Preserve the reason behind the policy.", session_text)
+            self.assertIn("Do not keep temporary logging as guidance.", session_text)
+
     def test_distill_splits_long_session_into_composable_units(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

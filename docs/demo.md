@@ -45,10 +45,10 @@ This produces a Markdown orientation page with:
 
 ## 3. Import A Sample Coding Session
 
-Use the small Venus example:
+Use the small, domain-neutral bug-fix example:
 
 ```bash
-vibewiki import-markdown examples/venus/sample_session.md --session-name demo
+vibewiki import-markdown examples/general/sample_session.md --session-name demo
 ```
 
 The imported session is stored under `.vibewiki/sessions/`. VibeWiki keeps the
@@ -125,9 +125,9 @@ VibeWiki appends approved memory into `docs/wiki/`, `skills/`, and `AGENTS.md`.
 Ask the local memory:
 
 ```bash
-vibewiki ask "how do I run the VEMU comparison?"
-vibewiki search "compare_outputs"
-vibewiki context --for "run the simulator comparison" --format json
+vibewiki ask "how did we make API retries safe?"
+vibewiki search "idempotent retry"
+vibewiki context --for "change the HTTP client retry policy" --format json
 ```
 
 `ask` is for humans. `context` is for AI agents.

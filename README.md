@@ -13,50 +13,61 @@
 # VibeWiki
 
 <p align="center">
-  <strong>The reviewed memory layer for AI coding agents.</strong>
+  <strong>Turn AI conversations into memory your next task can use.</strong>
 </p>
 
 <p align="center">
-  Stop solving the same project-specific bug twice. VibeWiki turns successful
-  AI coding sessions into team knowledge, reusable skills, and compact context
-  packs for future agents.
+  VibeWiki turns useful moments from Codex, Claude, ChatGPT, Cursor, and other
+  AI conversations into a reviewed personal or project knowledge base.
 </p>
 
 ![VibeWiki dashboard showing memory status, review funnel, and card type charts](docs/assets/dashboard.png)
 
 ## The 30-Second Pitch
 
-AI coding agents are great at the next edit. Teams still lose the lessons that
-made the edit work:
+Developers solve real problems with AI every day, but the useful context usually
+disappears inside long chat histories:
 
-- the exact command that reproduced a bug
-- the simulator setting that made a run valid
-- the workaround that should not become folklore
-- the proof that a fix was actually correct
-- the prompt pattern that made an agent useful
+- the fix that finally worked
+- the reason behind an architecture decision
+- the command that made a release succeed
+- the constraint that invalidated an earlier approach
+- the unfinished idea worth revisiting next month
 
-VibeWiki compiles those traces into reviewed project memory:
+VibeWiki compiles those conversations into memory that stays useful:
 
 ```text
-AI session + commands + diff + tests
+AI conversations + work evidence
 -> candidate memory cards
--> human review
--> Wiki notes + skilllets + workflows + agent context packs
+-> quick human review
+-> personal or project Wiki
+-> answers for people + compact context for AI agents
 ```
 
-It is not another coding agent. It is the memory layer that lets Codex, Claude
-Code, Cursor, Cline, Aider, OpenHands, and future agents start with what your
-team already learned.
+Use it alone to build a memory that follows you across projects, or keep one in
+a repository so a whole team and its AI agents can reuse what has already been
+learned. VibeWiki is not another coding agent. It is the shared memory behind
+the agents you already use.
+
+## Personal Memory And Project Memory
+
+| Mode | What it remembers | Who reuses it |
+| --- | --- | --- |
+| Personal Wiki | your recurring solutions, preferences, prompts, research notes, and ideas | you and the AI tools you use across projects |
+| Project Wiki | shared decisions, commands, known issues, workflows, and verified fixes | every developer and AI agent working in the repository |
+
+Both modes use plain local files. You decide what becomes trusted memory, and
+you can inspect where every memory came from.
 
 ## Why It Stands Out
 
 | Common approach | What it gives you | What VibeWiki adds |
 | --- | --- | --- |
 | RAG over docs | retrieve existing text | evidence-backed memory from real work |
-| Repo maps / DeepWiki-style docs | understand the current codebase | remember commands, failures, fixes, and decisions |
+| Repo maps / generated docs | understand the current codebase | remember what happened while people changed it |
 | Agent rules / skills | static instructions | reviewed skill evolution from repeated sessions |
 | Chat history | raw conversation logs | compact memory cards with source, actor, and confidence |
-| Team wiki | manually written notes | a review-first compiler for AI collaboration traces |
+| Personal or team wiki | manually written notes | conversation-to-knowledge capture with a review step |
 
 See [`docs/ecosystem.md`](docs/ecosystem.md) for the fuller ecosystem stance.
 
@@ -68,7 +79,7 @@ cd VibeWiki
 python3 -m pip install -e .
 
 vibewiki setup
-vibewiki import-markdown examples/venus/sample_session.md --session-name demo
+vibewiki import-markdown examples/general/sample_session.md --session-name demo
 vibewiki distill
 vibewiki doctor
 vibewiki dashboard
@@ -166,15 +177,15 @@ merge suggestion for review rather than an automatic merge.
 
 ## Why This Exists
 
-AI coding agents are powerful, but they forget project-specific lessons:
+AI conversations are useful in the moment, but poor as long-term memory:
 
-- the exact command that reproduced a simulator bug
-- the row/lane/config setting that made a benchmark valid
-- the workaround that should not be repeated later
-- the test output that proved a fix
-- the reason a parameter changed
+- one conversation may contain several unrelated lessons
+- the final answer is mixed with failed attempts and stale assumptions
+- teammates cannot easily discover what somebody else already learned
+- a new agent starts from zero unless a developer writes another long prompt
+- valuable decisions, warnings, and ideas are hard to find weeks later
 
-VibeWiki gives those lessons a home.
+VibeWiki gives those lessons a durable, searchable, and reviewable home.
 
 ## Install From Source
 
@@ -195,11 +206,10 @@ In any project you want to give memory:
 
 ```bash
 vibewiki setup
-vibewiki capture --goal "Fix simulator mismatch" \
-  --outcome "Aligned VEMU output with the reference trace" \
-  --command "make run-vemu" \
-  --command "python3 compare_outputs.py" \
-  --tests "compare_outputs.py passed"
+vibewiki capture --goal "Fix duplicate API requests after timeouts" \
+  --outcome "Retries are now safe for idempotent requests" \
+  --command "python3 -m pytest tests/test_retry_policy.py -q" \
+  --tests "retry policy tests passed"
 vibewiki distill
 vibewiki dashboard
 vibewiki review-board
@@ -386,9 +396,9 @@ VibeWiki also dogfoods this workflow on its own design conversations. See
 VibeWiki has two reuse entrances:
 
 ```bash
-vibewiki ask "CloudRIC 能不能说比传统基站省电？"
-vibewiki cards "远程 MATLAB 仿真"
-vibewiki context --for "debug VCMXMUL mismatch"
+vibewiki ask "上次登录超时问题是怎么修好的？"
+vibewiki cards "API retry policy"
+vibewiki context --for "change authentication without breaking retries"
 ```
 
 `ask` is for humans. It first searches compact memory cards that summarize
@@ -401,7 +411,7 @@ the underlying evidence.
 `cards` shows the compact memory layer directly:
 
 ```bash
-vibewiki cards "怎么运行 MATLAB 仿真" --json
+vibewiki cards "database migration rollback" --json
 ```
 
 `context` is for AI agents. It returns a compact, machine-readable context pack
@@ -409,13 +419,13 @@ so a coding agent can start with relevant facts, skills, warnings, and sources
 instead of making the user rewrite a long prompt:
 
 ```bash
-vibewiki context --for "run VEMU F5" --format json --max-items 5 --max-chars 500
+vibewiki context --for "upgrade the API client safely" --format json --max-items 5 --max-chars 500
 ```
 
 `search` shows the raw ranked evidence:
 
 ```bash
-vibewiki search "VEMU F5 TARGET_DAG"
+vibewiki search "authentication timeout retry"
 ```
 
 Search covers both reviewed memory and unreviewed patches by default. Results
@@ -510,7 +520,7 @@ export VIBEWIKI_TRANSLATION_PROVIDER="llm"
 - `v0.2`: bootstrap and personal memory workflows
 - `v0.3`: GitHub PR comment workflow
 - `v0.4`: Skilllet versioning, deprecation, and cross-session evolution
-- `v0.5`: Venus/VEMU/gem5/RTL case study
+- `v0.5`: real-world case studies across different development workflows
 - `v0.6`: local Markdown retrieval with citations and LLM-Wiki-style search/read
 - `v1.0`: CLI, GitHub Action, docs, examples, and demo video
 
@@ -549,11 +559,16 @@ LLM-Wiki-style retrieval layers.
 
 See [`docs/research_ecc.md`](docs/research_ecc.md).
 
-## Killer Demo
+## One Memory Loop, Any Project
 
-Venus is the first serious case study: use VibeWiki to preserve hard-won
-knowledge from VEMU simulation, gem5 performance runs, RTL alignment, MATLAB
-gold comparisons, compiler backend debugging, and LDPC benchmark validation.
+VibeWiki is domain-independent. A session may be about a web API, a mobile app,
+data analysis, infrastructure, an open-source library, embedded software, or a
+research prototype. The memory lifecycle stays the same:
 
-See the first real example in
-[`examples/venus/real_sessions/cmxmul_ofdm`](examples/venus/real_sessions/cmxmul_ofdm/README.md).
+```text
+remember what happened -> review what matters -> reuse it when needed
+```
+
+Start with the generic bug-fix conversation in
+[`examples/general/sample_session.md`](examples/general/sample_session.md).
+Specialized examples can live beside it without becoming product assumptions.

@@ -7,8 +7,9 @@ into reviewed, composable project memory.
 
 ## User Story
 
-A developer uses an AI coding agent to fix a bug, run a simulator, or validate a
-benchmark. After the session, they run:
+A developer uses an AI coding agent to fix a bug, ship a feature, investigate an
+incident, improve tooling, or explore a research idea. After the session, they
+run:
 
 ```bash
 vibewiki capture
@@ -57,13 +58,13 @@ patterns/workflows, a compatibility Skill draft, and updated agent guidance.
 
 ## First Real Case
 
-Use a Venus session:
+Use a common API bug-fix session:
 
-- VEMU simulation run
-- gem5 simulation run
-- RTL alignment
-- MATLAB gold comparison
-- LDPC benchmark validation
+- preserve the reason retries were unsafe
+- record the verified test command
+- capture the reusable retry-policy rule
+- keep failed experiments as evidence without promoting them to guidance
+- let a future developer or agent retrieve the answer without rereading the chat
 
-The demo should show that a future agent can combine generated skilllets, prompt
-patterns, and workflows instead of repeating the same investigation.
+The demo should show that useful memory is smaller than the original
+conversation and more actionable than a raw transcript.

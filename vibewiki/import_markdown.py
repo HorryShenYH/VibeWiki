@@ -73,7 +73,42 @@ def first_heading(markdown: str) -> str:
     return ""
 
 
+def extract_markdown_section(markdown: str, headings: tuple[str, ...]) -> str:
+    """Return the first matching Markdown section without its heading."""
+    normalized_headings = {_normalize_heading(heading) for heading in headings}
+    section_level = 0
+    content: list[str] = []
+
+    for line in markdown.splitlines():
+        match = re.match(r"^\s*(#{1,6})\s+(.+?)\s*#*\s*$", line)
+        if match:
+            level = len(match.group(1))
+            title = _normalize_heading(match.group(2))
+            if section_level and level <= section_level:
+                break
+            if not section_level and title in normalized_headings:
+                section_level = level
+                continue
+
+        if section_level:
+            content.append(line)
+
+    return "\n".join(content).strip()
+
+
+def _normalize_heading(value: str) -> str:
+    clean = value.strip().rstrip(":：").casefold()
+    return re.sub(r"\s+", " ", clean)
+
+
 def likely_outcome(markdown: str) -> str:
+    section = extract_markdown_section(
+        markdown,
+        ("final outcome", "outcome", "result", "conclusion", "最终结果", "结果", "结论"),
+    )
+    if section and section != "Not provided.":
+        return section
+
     lines = [line.strip() for line in markdown.splitlines()]
     candidates: list[str] = []
     for line in lines:
@@ -195,8 +230,38 @@ def import_markdown_session(
     inferred_goal = goal or title or source_path.stem
     inferred_outcome = outcome or likely_outcome(markdown)
     inferred_commands = compact_list([*(commands or []), *extract_commands(markdown)])
-    inferred_tests = tests or "\n".join(extract_hint_lines(markdown, TEST_HINTS))
-    inferred_benchmark = benchmark or "\n".join(extract_hint_lines(markdown, BENCHMARK_HINTS))
+    inferred_tests = (
+        tests
+        or extract_markdown_section(
+            markdown,
+            (
+                "tests / verification",
+                "tests",
+                "verification",
+                "validation",
+                "测试 / 验证",
+                "测试",
+                "验证",
+            ),
+        )
+        or "\n".join(extract_hint_lines(markdown, TEST_HINTS))
+    )
+    inferred_benchmark = (
+        benchmark
+        or extract_markdown_section(
+            markdown,
+            ("benchmark results", "benchmarks", "benchmark", "metrics", "基准结果", "性能结果"),
+        )
+        or "\n".join(extract_hint_lines(markdown, BENCHMARK_HINTS))
+    )
+    inferred_notes = notes or extract_markdown_section(
+        markdown,
+        ("user notes", "notes", "developer notes", "用户备注", "备注"),
+    )
+    inferred_things_not_to_record = things_not_to_record or extract_markdown_section(
+        markdown,
+        ("things not to record", "do not record", "不要记录", "不记录"),
+    )
     summary = render_import_summary(source_path, title, inferred_outcome)
     session_slug = session_name or slugify(inferred_goal, fallback=source_path.stem)
 
@@ -207,9 +272,9 @@ def import_markdown_session(
         commands=inferred_commands,
         tests=inferred_tests,
         benchmark=inferred_benchmark,
-        notes=notes,
+        notes=inferred_notes,
         ai_summary=summary,
-        things_not_to_record=things_not_to_record,
+        things_not_to_record=inferred_things_not_to_record,
         session_name=session_slug,
     )
 

@@ -49,16 +49,15 @@
 - `When Not To Use`, probes, evidence, confidence, and environment requirements
 - skilllet evolution log
 
-## v0.5: Venus Case Study
+## v0.5: Real-World Case Studies
 
-- VEMU simulation skilllets
-- VEMU output mismatch skilllets
-- gem5 performance simulation skilllets
-- RTL alignment skilllets
-- MATLAB gold comparison skilllets
-- LDPC benchmark skilllets
-- workflows that compose the smaller units into full verification runs
-- verifier-style probes for DSL build, Emulator run, dump comparison, and generated assembly markers
+- web application bug-fix memory
+- release and infrastructure workflows
+- data and research investigation notes
+- reusable personal knowledge across projects
+- shared project memory across multiple developers
+- specialized engineering examples packaged without assumptions in the core
+- evaluation of recall quality, review cost, and context-token savings
 
 ## v0.6: Advanced Ask And Retrieval
 
@@ -76,4 +75,4 @@
 - examples
 - docs
 - demo video
-- Venus case study
+- several domain-independent case studies

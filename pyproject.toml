@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "vibewiki"
 version = "0.1.0"
-description = "Turn AI coding sessions into reviewed project and personal memory."
+description = "Turn AI conversations into reviewed personal and project memory."
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
@@ -14,12 +14,14 @@ authors = [
 ]
 keywords = [
   "ai-coding",
+  "ai-memory",
   "agent-memory",
   "agents",
   "developer-tools",
   "knowledge-management",
   "llm",
-  "rag",
+  "personal-knowledge-base",
+  "project-memory",
   "team-wiki",
   "vibe-coding",
   "wiki",
