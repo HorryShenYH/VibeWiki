@@ -3,12 +3,13 @@
 Logo idea:
 
 ```text
-minimal V mark + reviewed memory signal
+open knowledge book + negative-space V + reviewed baseline
 ```
 
 Files:
 
 - `logo-mark.svg` / `logo-mark.png`: square mark for avatars, icons, and favicons.
+- `logo-mark-mono.svg`: one-color mark for print and constrained surfaces.
 - `logo-wordmark.svg` / `logo-wordmark.png`: README and presentation wordmark.
 - `social-preview.svg` / `social-preview.png`: GitHub social preview artwork.
 - `control-center.png`: current product screenshot used by the README.

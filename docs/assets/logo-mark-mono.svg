@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
+  <title id="title">VibeWiki monochrome logo mark</title>
+  <desc id="desc">A monochrome open knowledge book whose center forms a V.</desc>
+  <path d="M96 126C153 118 207 132 240 158L256 390C211 352 158 333 96 338V126Z" fill="#17232D"/>
+  <path d="M416 126C359 118 305 132 272 158L256 390C301 352 354 333 416 338V126Z" fill="#17232D" opacity=".62"/>
+  <path d="M224 420H288" fill="none" stroke="#17232D" stroke-width="10" stroke-linecap="round"/>
+</svg>

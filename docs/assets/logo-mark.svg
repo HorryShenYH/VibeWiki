@@ -1,8 +1,8 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
   <title id="title">VibeWiki logo mark</title>
-  <desc id="desc">A clean V shaped mark for reviewed project memory.</desc>
-  <rect width="512" height="512" rx="112" fill="#F7FAF6"/>
-  <path d="M150 142L248 368" fill="none" stroke="#17202A" stroke-width="58" stroke-linecap="round"/>
-  <path d="M362 142L264 368" fill="none" stroke="#2A9D8F" stroke-width="58" stroke-linecap="round"/>
-  <circle cx="256" cy="380" r="18" fill="#E9C46A"/>
+  <desc id="desc">An open knowledge book whose center forms a V for reviewed memory.</desc>
+  <rect width="512" height="512" rx="96" fill="#17232D"/>
+  <path d="M96 126C153 118 207 132 240 158L256 390C211 352 158 333 96 338V126Z" fill="#F5F8F5"/>
+  <path d="M416 126C359 118 305 132 272 158L256 390C301 352 354 333 416 338V126Z" fill="#2AA397"/>
+  <path d="M224 420H288" fill="none" stroke="#F0B84B" stroke-width="10" stroke-linecap="round"/>
 </svg>

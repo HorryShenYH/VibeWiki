@@ -80,6 +80,7 @@ def render_control_center(
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>VibeWiki - {_escape(data.project_name)}</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%2317232D'/%3E%3Cpath d='M12 16c7-1 14 1 18 4l2 29c-6-5-13-7-20-7V16Z' fill='%23F5F8F5'/%3E%3Cpath d='M52 16c-7-1-14 1-18 4l-2 29c6-5 13-7 20-7V16Z' fill='%232AA397'/%3E%3C/svg%3E">
   <style>
     :root {{
       color-scheme: light;
@@ -151,16 +152,12 @@ def render_control_center(
     }}
     .brand {{ display: flex; align-items: center; gap: 10px; color: #fff; text-decoration: none; }}
     .brand-mark {{
-      width: 34px;
-      height: 34px;
-      display: grid;
-      place-items: center;
-      border: 1px solid rgba(255,255,255,.2);
-      border-radius: 6px;
-      color: #62c7bb;
-      font-size: 21px;
-      font-weight: 900;
+      width: 36px;
+      height: 36px;
+      display: block;
+      flex: 0 0 auto;
     }}
+    .brand-mark svg {{ display: block; width: 100%; height: 100%; }}
     .brand strong {{ display: block; font-size: 16px; }}
     .brand small {{ display: block; color: #9eaaa5; font-size: 11px; }}
     nav {{ display: grid; gap: 5px; }}
@@ -311,7 +308,14 @@ def render_control_center(
   <div class="app">
     <aside class="sidebar">
       <a class="brand" href="#overview">
-        <span class="brand-mark">V</span>
+        <span class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 64 64">
+            <rect width="64" height="64" rx="12" fill="#24333F"/>
+            <path d="M12 16C19 15 26 17 30 20L32 49C26 44 19 42 12 42V16Z" fill="#F5F8F5"/>
+            <path d="M52 16C45 15 38 17 34 20L32 49C38 44 45 42 52 42V16Z" fill="#2AA397"/>
+            <path d="M28 54H36" stroke="#F0B84B" stroke-width="2" stroke-linecap="round"/>
+          </svg>
+        </span>
         <span><strong>VibeWiki</strong><small>{_i18n("Memory control", "记忆中控")}</small></span>
       </a>
       <nav aria-label="Primary">
