@@ -4,20 +4,20 @@
 
 VibeWiki is a project and personal memory framework for AI coding. It can
 bootstrap a baseline Wiki from a repository scan, then turn successful Codex,
-Claude, Cursor, ChatGPT, or Copilot sessions into reviewed Wiki patches, typed
+Claude, Cursor, ChatGPT, or Copilot sessions into source-linked Wiki patches, typed
 findings, composable skilllets, prompt patterns, workflows, and agent-facing
 rules.
 
 ## Core Loop
 
 ```text
-bootstrap -> capture/import -> distill -> review -> merge -> reuse
+bootstrap -> capture/import -> distill -> assure -> review exceptions -> merge -> reuse
 ```
 
 ## Core Model
 
 ```text
-Project Scan / Session -> Findings -> Promotion -> Skilllets / Patterns / Workflows -> Review -> Merge
+Project Scan / Session -> Findings -> Local Assurance -> Auto Knowledge / Reviewed Skills -> Merge
 ```
 
 VibeWiki has two memory scopes:
@@ -27,7 +27,7 @@ VibeWiki has two memory scopes:
 - `personal`: cross-project practices, reusable prompts, research notes,
   instincts, and workflows that should follow the user across repositories
 
-The same review-first pipeline applies to both scopes. Project memory should be
+The same assurance-first pipeline applies to both scopes. Project memory should be
 more concrete and evidence-bound; personal memory should be promoted only when a
 lesson proves useful beyond one repository.
 
@@ -39,8 +39,8 @@ VibeWiki supports two complementary modes:
   skill to produce the first project brief, first-file reading list, and
   baseline commands
 - grow memory: import or capture vibe-coding conversations, distill what
-  changed, review candidates, and merge approved knowledge or skills back into
-  the Wiki
+  changed, auto-promote clear knowledge, and review only skills, conflicts, or
+  incomplete evidence before merge
 
 The bootstrap pass gives an AI agent enough orientation to start work without
 pretending the Wiki is complete. The growth loop makes the Wiki better every
@@ -123,12 +123,14 @@ VibeWiki creates candidate patches:
 - Skill Patch: compatibility review entry point for current tooling
 - Agent Rule Patch: rules for future coding agents
 - Clarifying Questions: missing context before merge
+- Assurance Report: structured exception ledger, coverage, and source hashes
+- Proof Report: merge decision, output hashes, and the exact reviewed snapshot
 
 ## Knowledge States
 
 - `candidate`: generated from a session
 - `verified`: backed by command, test, benchmark, diff, or commit evidence
-- `approved`: accepted by a human reviewer
+- `approved`: accepted by a human or by the configured local-assurance policy
 - `uncertain`: useful but missing proof or scope
 - `deprecated`: kept for history but no longer recommended
 
@@ -140,7 +142,7 @@ The original plan was broad and exciting, but v0.1 should be narrower:
 - Do not start with a web UI.
 - Do not depend on full chat-log ingestion.
 - Do not require an LLM for the first working loop.
-- Do not auto-edit the final Wiki.
+- Do not auto-export reusable skills or agent rules without review.
 
 The first release should prove one thing well: a successful development session
 can become auditable, composable memory that a person can accept or reject.
@@ -158,7 +160,7 @@ can become auditable, composable memory that a person can accept or reject.
 
 The LLM should improve distillation quality, not own trust. It can summarize,
 classify, and ask questions, but the system should preserve evidence and keep
-human approval in the loop.
+human judgment for reusable guidance, conflicts, and incomplete provenance.
 
 ## Relationship To LLM-Wiki
 
@@ -169,7 +171,7 @@ and link-following operations.
 VibeWiki should stay focused on the upstream trust problem:
 
 ```text
-AI coding session -> reviewed memory patch -> approved Wiki / Skill / Agent Rule
+AI coding session -> assured memory patch -> Wiki / reviewed Skill / Agent Rule
 ```
 
 Then it can export approved memory to LLM-Wiki-like retrieval surfaces:

@@ -8,6 +8,7 @@ import re
 import socketserver
 from urllib.parse import parse_qs, urlencode
 
+from .assurance import AssuranceIssue, build_assurance_report
 from .distill import parse_sections
 from .llm import chat_completion, llm_settings
 from .merge import merge_patches
@@ -62,6 +63,7 @@ def render_review_ui(
     session_id = selected_patch_dir.name
     decisions = read_item_decisions(root, session_id)
     review_plan = build_review_plan(root, patch_dir=selected_patch_dir)
+    assurance = build_assurance_report(root, patch_dir=selected_patch_dir)
     plan_summary = review_plan.payload.get("summary", {})
     if not isinstance(plan_summary, dict):
         plan_summary = {}
@@ -253,6 +255,12 @@ def render_review_ui(
       font-size: 12px;
       margin-top: 2px;
     }}
+    .assurance-list {{ display: grid; gap: 8px; margin-top: 12px; }}
+    .assurance-item {{ border-left: 3px solid var(--amber); padding: 7px 9px; background: #fff; }}
+    .assurance-item.high {{ border-left-color: var(--rose); }}
+    .assurance-item strong {{ display: block; font-size: 13px; }}
+    .assurance-item p {{ margin: 3px 0 0; color: var(--muted); font-size: 12px; }}
+    .assurance-clear {{ margin-top: 12px; padding: 9px; color: var(--teal); background: #fff; border-left: 3px solid var(--teal); }}
     .plan-reason {{
       color: var(--muted);
       font-size: 12px;
@@ -454,13 +462,9 @@ def render_review_ui(
           <button type="button" data-lang-choice="zh" aria-pressed="{_escape(str(clean_default_lang == 'zh').lower())}">中文</button>
         </div>
         <div class="patch-actions">
-          <form method="post" action="/patch-review">
+          <form method="post" action="/approve-and-merge">
             <input type="hidden" name="patch" value="{_escape(session_id)}">
-            <button class="primary" type="submit">{_i18n("Approve Patch", "批准整包")}</button>
-          </form>
-          <form method="post" action="/merge">
-            <input type="hidden" name="patch" value="{_escape(session_id)}">
-            <button class="merge" type="submit">{_i18n("Merge Submitted", "合并已提交")}</button>
+            <button class="primary" type="submit">{_i18n("Approve & Merge", "批准并合并")}</button>
           </form>
         </div>
       </div>
@@ -478,23 +482,23 @@ def render_review_ui(
           </div>
         </section>
         <section class="panel">
-          <h2>{_i18n("Pre-Review Triage", "预审整理")}</h2>
+          <h2>{_i18n("Memory Assurance", "记忆质检")}</h2>
           <div class="text">
-            <p>{_i18n("VibeWiki keeps every raw candidate, but only shows the strongest review batch by default.", "VibeWiki 会保留所有原始候选，但默认只显示最值得人工判断的一批。")}</p>
+            <p>{_i18n("Only exceptions reach you. Raw candidates remain available as evidence.", "只有例外情况需要你处理，原始候选仍作为证据保留。")}</p>
             <div class="triage-grid">
-              {_triage_cell("Raw", "原始候选", plan_summary.get("raw_items", 0))}
-              {_triage_cell("Review now", "优先审核", plan_summary.get("review_now", 0))}
-              {_triage_cell("Lower priority", "低优先级", plan_summary.get("suggested_later", 0))}
-              {_triage_cell("Suggested discard", "建议不提交", plan_summary.get("suggested_discard", 0))}
+              {_triage_cell("Checked", "已检查", assurance.candidate_count)}
+              {_triage_cell("Exceptions", "例外", assurance.attention_count)}
+              {_triage_cell("Coverage", "检查状态", assurance.status)}
+              {_triage_cell("Duplicates hidden", "已隐藏重复", plan_summary.get("suggested_discard", 0))}
             </div>
+            {_assurance_issue_rows(assurance.issues)}
           </div>
         </section>
         <section class="panel">
-          <h2>{_i18n("Review Notes", "审核说明")}</h2>
+          <h2>{_i18n("Your decision", "你的决定")}</h2>
           <div class="text">
-            <p>{_i18n("Review one candidate at a time: submit it, discard it, edit Markdown directly, or ask the LLM to revise it from your instructions.", "一次只审核一条候选：提交、不提交、直接改 Markdown，或者写修改意见让 LLM 修订。")}</p>
-            <p>{_i18n("The LLM only rewrites the candidate draft. You still decide whether to submit it.", "LLM 只生成修订稿，是否提交仍然由你判断。")}</p>
-            <p>{_i18n("Translated Markdown previews are display-only and cached locally; the source Markdown stays English.", "翻译后的 Markdown 预览只用于显示，并会本地缓存；源 Markdown 仍然保持英文。")}</p>
+            <p>{_i18n("Check the flagged skill or conflict, edit it when needed, then approve the pack. Everything else is handled automatically.", "只需检查标出的 Skill 或冲突，必要时直接修改，然后批准整包；其余内容自动处理。")}</p>
+            <p>{_i18n("Local assurance checks provenance and structure. It does not claim that every statement is correct.", "本地质检检查来源与结构，但不会声称每条内容都绝对正确。")}</p>
           </div>
         </section>
       </aside>
@@ -705,6 +709,14 @@ def perform_review_action(
         review_patches(root, patch_dir=selected_patch_dir, approve=True)
         return ReviewActionResult("Patch approved", "整包已批准")
 
+    if path == "/approve-and-merge":
+        review_patches(root, patch_dir=selected_patch_dir, approve=True)
+        changed = merge_patches(root, patch_dir=selected_patch_dir)
+        return ReviewActionResult(
+            f"Approved and merged {len(changed)} files",
+            f"已批准并合并 {len(changed)} 个文件",
+        )
+
     if path == "/merge":
         changed = merge_patches(root, patch_dir=selected_patch_dir)
         return ReviewActionResult(
@@ -855,6 +867,33 @@ def _triage_cell(en: str, zh: str, value: object) -> str:
         f'<span class="triage-label">{_i18n(en, zh)}</span>'
         "</div>"
     )
+
+
+def _assurance_issue_rows(issues: tuple[AssuranceIssue, ...]) -> str:
+    translations = {
+        "source-missing": ("源对话缺失", "记忆草稿无法追溯到导入或记录的原始对话。"),
+        "source-link-mismatch": ("候选项来源不一致", "一个或多个候选项指向了不同的来源会话。"),
+        "reusable-guidance": ("可复用流程需要审核", "它可能影响未来的 AI Agent，可信前需要人工确认。"),
+        "memory-conflict": ("可能需要更新已有记忆", "请决定合并、替换，还是保留两个版本。"),
+        "incomplete-evidence": ("关键证据仍不完整", "本次检查明确标为部分完成，不会假装已经全部验证。"),
+        "candidate-volume": ("候选记忆过多", "请把它当作一个过度提取问题处理，无需逐条审核全部候选。"),
+    }
+    human_issues = [issue for issue in issues if issue.requires_human]
+    if not human_issues:
+        return (
+            '<div class="assurance-clear">'
+            f'{_i18n("No exception needs human review.", "没有需要人工处理的例外。")}'
+            "</div>"
+        )
+    rows: list[str] = []
+    for issue in human_issues:
+        title_zh, message_zh = translations.get(issue.code, (issue.title, issue.message))
+        rows.append(
+            f'<div class="assurance-item {_escape(issue.severity)}">'
+            f'<strong>{_i18n(issue.title, title_zh)}</strong>'
+            f'<p>{_i18n(issue.message, message_zh)}</p></div>'
+        )
+    return f'<div class="assurance-list">{"".join(rows)}</div>'
 
 
 def _plan_group(item: dict[str, object]) -> str:

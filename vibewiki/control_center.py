@@ -9,6 +9,11 @@ import socketserver
 from urllib.parse import parse_qs, urlencode, urlparse
 import uuid
 
+from .assurance import (
+    AssuranceReport,
+    build_assurance_report,
+    load_assurance_policy,
+)
 from .capture import capture_session
 from .conversations import (
     ConversationRecord,
@@ -32,7 +37,7 @@ from .merge import merge_patches
 from .project import ensure_workspace
 from .project_understanding import build_project_brief, render_project_brief_markdown
 from .retrieval import answer_question, build_context_pack, load_retrieval_config
-from .review import read_item_decisions
+from .review import read_item_decisions, review_patches
 from .review_ui import perform_review_action, render_review_ui
 from .text_utils import read_text_if_exists, slugify, utcish_timestamp
 
@@ -43,6 +48,7 @@ REVIEW_ACTIONS = {
     "/bulk-decision",
     "/save-item",
     "/patch-review",
+    "/approve-and-merge",
     "/merge",
 }
 
@@ -55,6 +61,13 @@ class ConsoleActionResult:
     result_title: str = ""
     result_title_zh: str = ""
     result_text: str = ""
+
+
+@dataclass(frozen=True)
+class DistillAutomationResult:
+    generated: bool
+    auto_promoted: bool = False
+    attention_count: int = 0
 
 
 def render_control_center(
@@ -72,7 +85,26 @@ def render_control_center(
     data = build_dashboard_data(root)
     approved_cards = data.status_counts.get("approved", 0)
     merged_patches = _merged_patch_ids(root)
-    pending_reviews = max(len(data.patches) - len(merged_patches), 0)
+    assurance_policy = load_assurance_policy(root)
+    manual_review = assurance_policy.mode != "exceptions"
+    assurance_reports = {
+        patch.name: build_assurance_report(root, patch_dir=patch)
+        for patch in data.patches
+        if patch.name not in merged_patches
+    }
+    pending_reviews = (
+        len(assurance_reports)
+        if manual_review
+        else sum(
+            report.attention_count
+            for report in assurance_reports.values()
+            if report.needs_attention
+        )
+    ) + sum(
+        1
+        for session in data.sessions
+        if not (root / ".vibewiki" / "patches" / session.name).exists()
+    )
     config = load_retrieval_config(root)
     configured_llm = llm_settings(
         base_url_env=config.llm_base_url_env,
@@ -118,7 +150,12 @@ def render_control_center(
         else ""
     )
     latest_cards = sorted(data.cards, key=lambda card: card.source.as_posix(), reverse=True)[:6]
-    session_rows = _session_rows(data, merged_patches)
+    session_rows = _session_rows(
+        data,
+        merged_patches,
+        assurance_reports,
+        manual_review=manual_review,
+    )
     conversations = list_conversations(root)
     conversation_rows = _conversation_rows(root, conversations)
     kind_rows = [(kind, count) for kind, count in data.kind_counts.most_common(6) if count]
@@ -841,7 +878,7 @@ def render_control_center(
               <h2>{_i18n("Needs attention", "需要处理")}</h2>
               <span class="section-count attention-count">{pending_reviews}</span>
             </div>
-            <div class="queue">{session_rows or _empty("No conversations yet", "还没有对话")}</div>
+            <div class="queue">{session_rows or _empty("No exceptions. Memory is up to date.", "没有例外，记忆已是最新状态。")}</div>
           </section>
         </div>
 
@@ -1274,9 +1311,12 @@ def perform_console_action(
         generated = _auto_distill(root, session.session_dir, data)
         message = "Conversation imported"
         message_zh = "对话已导入"
-        if generated:
-            message += "; memory draft generated"
-            message_zh += "，并已生成记忆草稿"
+        if generated.generated:
+            message, message_zh = _append_distill_message(
+                message,
+                message_zh,
+                generated,
+            )
         return ConsoleActionResult(message, message_zh, anchor="add")
 
     if path == "/action/import-url":
@@ -1292,9 +1332,12 @@ def perform_console_action(
         generated = _auto_distill(root, session.session_dir, data)
         message = "Conversation link imported"
         message_zh = "对话链接已导入"
-        if generated:
-            message += "; memory draft generated"
-            message_zh += "，并已生成记忆草稿"
+        if generated.generated:
+            message, message_zh = _append_distill_message(
+                message,
+                message_zh,
+                generated,
+            )
         return ConsoleActionResult(message, message_zh, anchor="add")
 
     if path == "/action/capture":
@@ -1313,16 +1356,26 @@ def perform_console_action(
         generated = _auto_distill(root, session.session_dir, data)
         message = "Result captured"
         message_zh = "结果已记录"
-        if generated:
-            message += "; memory draft generated"
-            message_zh += "，并已生成记忆草稿"
+        if generated.generated:
+            message, message_zh = _append_distill_message(
+                message,
+                message_zh,
+                generated,
+            )
         return ConsoleActionResult(message, message_zh, anchor="add")
 
     if path == "/action/distill":
         session_dir = _session_dir(root, _value(data, "session"))
         patches = distill_session(root, session_dir=session_dir)
         append_event(root, "distill", subject=patches.session_id, data={"patch_dir": str(patches.patch_dir)})
-        return ConsoleActionResult("Memory draft generated", "记忆草稿已生成", anchor="work")
+        generated = finalize_distill(root, patches.patch_dir, source="ui")
+        message, message_zh = _append_distill_message(
+            "Memory draft generated",
+            "记忆草稿已生成",
+            generated,
+            include_generated=False,
+        )
+        return ConsoleActionResult(message, message_zh, anchor="work")
 
     if path == "/action/delete-session":
         session_id = _value(data, "session")
@@ -1458,9 +1511,13 @@ def perform_console_action(
     raise ValueError(f"Unknown control-center action: {path}")
 
 
-def _auto_distill(project: Path, session_dir: Path, data: dict[str, list[str]]) -> bool:
+def _auto_distill(
+    project: Path,
+    session_dir: Path,
+    data: dict[str, list[str]],
+) -> DistillAutomationResult:
     if _value(data, "auto_distill") != "yes":
-        return False
+        return DistillAutomationResult(generated=False)
     patches = distill_session(project, session_dir=session_dir)
     append_event(
         project,
@@ -1468,10 +1525,105 @@ def _auto_distill(project: Path, session_dir: Path, data: dict[str, list[str]]) 
         subject=patches.session_id,
         data={"patch_dir": str(patches.patch_dir), "source": "ui"},
     )
-    return True
+    return finalize_distill(project, patches.patch_dir, source="ui")
 
 
-def _session_rows(data: DashboardData, merged_patches: set[str]) -> str:
+def finalize_distill(
+    project: Path,
+    patch_dir: Path,
+    *,
+    source: str,
+) -> DistillAutomationResult:
+    report = build_assurance_report(project, patch_dir=patch_dir)
+    append_event(
+        project,
+        "assurance",
+        subject=patch_dir.name,
+        data={
+            "status": report.status,
+            "attention": report.attention_count,
+            "path": str(report.path),
+            "source": source,
+        },
+    )
+    policy = load_assurance_policy(project)
+    should_promote = (
+        policy.mode == "exceptions"
+        and policy.auto_promote_clear_knowledge
+        and not report.needs_attention
+    )
+    if not should_promote:
+        return DistillAutomationResult(
+            generated=True,
+            attention_count=report.attention_count,
+        )
+
+    review = review_patches(
+        project,
+        patch_dir=patch_dir,
+        approve=True,
+        reviewer="vibewiki",
+        method="local_assurance",
+        notes=(
+            "Automatically promoted source-linked knowledge after local assurance found no "
+            "skill, conflict, incomplete provenance, or over-distillation exception."
+        ),
+    )
+    append_event(
+        project,
+        "review",
+        subject=patch_dir.name,
+        data={
+            "decision": "approved",
+            "method": "local_assurance",
+            "review_file": str(review.review_file),
+        },
+    )
+    changed = merge_patches(project, patch_dir=patch_dir, safe_only=True)
+    append_event(
+        project,
+        "merge",
+        subject=patch_dir.name,
+        data={
+            "patch_dir": str(patch_dir),
+            "changed": [str(item) for item in changed],
+            "mode": "knowledge_only",
+            "source": source,
+        },
+    )
+    return DistillAutomationResult(generated=True, auto_promoted=True)
+
+
+def _append_distill_message(
+    message: str,
+    message_zh: str,
+    result: DistillAutomationResult,
+    *,
+    include_generated: bool = True,
+) -> tuple[str, str]:
+    if include_generated:
+        message += "; memory draft generated"
+        message_zh += "，并已生成记忆草稿"
+    if result.auto_promoted:
+        return (
+            message + "; safe knowledge added automatically",
+            message_zh + "，低风险知识已自动入库",
+        )
+    if result.attention_count:
+        return (
+            message + f"; {result.attention_count} exception(s) need attention",
+            message_zh + f"，有 {result.attention_count} 个例外需要处理",
+        )
+    return message, message_zh
+
+
+def _session_rows(
+    data: DashboardData,
+    merged_patches: set[str],
+    assurance_reports: dict[str, AssuranceReport],
+    *,
+    manual_review: bool,
+) -> str:
     rows: list[str] = []
     for session in reversed(data.sessions[-8:]):
         patch = data.root / ".vibewiki" / "patches" / session.name
@@ -1479,6 +1631,8 @@ def _session_rows(data: DashboardData, merged_patches: set[str]) -> str:
         goal = sections.get("Goal", session.name).strip().splitlines()[0]
         outcome = sections.get("Final Outcome", "").strip().splitlines()
         detail = outcome[0] if outcome and outcome[0] != "Not provided." else session.name
+        if session.name in merged_patches:
+            continue
         if not patch.exists():
             state = "captured"
             state_zh = "已记录"
@@ -1489,15 +1643,26 @@ def _session_rows(data: DashboardData, merged_patches: set[str]) -> str:
             )
             reviewed = "-"
         else:
+            assurance = assurance_reports.get(session.name)
+            if (
+                assurance
+                and not assurance.needs_attention
+                and not manual_review
+                and not _patch_approved(data.root, session.name)
+            ):
+                continue
             decisions = read_item_decisions(data.root, session.name)
-            reviewed = str(len(decisions))
+            reviewed = str(assurance.attention_count if assurance else len(decisions))
             approved = _patch_approved(data.root, session.name)
-            if session.name in merged_patches:
-                state, state_zh, status_class = "merged", "已合并", "merged"
-            elif approved:
+            if approved:
                 state, state_zh, status_class = "approved", "已批准", "approved"
             else:
-                state, state_zh, status_class = "candidate", "待审核", "candidate"
+                state, state_zh, status_class = "attention", "需处理", "candidate"
+            if assurance and assurance.needs_attention:
+                titles = [issue.title for issue in assurance.issues if issue.requires_human]
+                detail = "; ".join(titles[:2])
+            elif manual_review and not approved:
+                detail = "Manual approval is enabled for this workspace."
             actions = [
                 f'<a class="button secondary" href="/review?patch={_escape(session.name)}">{_i18n("Review", "审核")}</a>'
             ]
@@ -1510,7 +1675,7 @@ def _session_rows(data: DashboardData, merged_patches: set[str]) -> str:
         rows.append(
             f'<div class="queue-row"><div class="queue-title"><strong>{_escape(goal)}</strong><small>{_escape(detail)}</small></div>'
             f'<span class="status {status_class}">{_i18n(state, state_zh)}</span>'
-            f'<span class="review-count">{_escape(reviewed)} {_i18n("decisions", "项已审")}</span>'
+            f'<span class="review-count">{_escape(reviewed)} {_i18n("exceptions", "个例外")}</span>'
             f'<div class="row-actions">{action}</div></div>'
         )
     return "".join(rows)

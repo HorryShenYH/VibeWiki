@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from .assurance import PROOF_REPORT_FILE, write_proof_report
 from .events import recorded_by_for_memory
 from .project import ensure_workspace
 from .registry import (
@@ -13,6 +14,7 @@ from .registry import (
     write_registry,
 )
 from .review import ItemDecision, latest_patch_dir, read_item_decisions
+from .review_plan import build_review_plan
 from .text_utils import append_marked_section, read_text_if_exists
 
 
@@ -163,6 +165,7 @@ def _merge_unit_dir(
     name: str,
     registry_entries: dict,
     decisions: dict[str, ItemDecision],
+    discarded_items: set[str],
 ) -> list[Path]:
     source_dir = patch_dir / name
     if not source_dir.exists():
@@ -175,6 +178,9 @@ def _merge_unit_dir(
         if source.name == "index.md":
             continue
         decision = _decision_for(patch_dir, source, decisions)
+        item_id = source.resolve().relative_to(patch_dir.resolve()).as_posix()
+        if not decision and item_id in discarded_items:
+            continue
         if _skip_decision(decision):
             continue
         if decision and decision.decision == "downgrade":
@@ -218,6 +224,7 @@ def _merge_findings(
     patch_dir: Path,
     session_id: str,
     decisions: dict[str, ItemDecision],
+    discarded_items: set[str],
 ) -> list[Path]:
     source_dir = patch_dir / "findings"
     if not source_dir.exists():
@@ -228,6 +235,9 @@ def _merge_findings(
         if source.name == "index.md":
             continue
         decision = _decision_for(patch_dir, source, decisions)
+        item_id = source.resolve().relative_to(patch_dir.resolve()).as_posix()
+        if not decision and item_id in discarded_items:
+            continue
         if _skip_decision(decision):
             continue
         body = _merge_body(root, source, decision)
@@ -256,6 +266,7 @@ def merge_patches(
     *,
     patch_dir: Path | None = None,
     require_approved: bool = True,
+    safe_only: bool = False,
 ) -> list[Path]:
     root = project.resolve()
     ensure_workspace(root)
@@ -268,9 +279,15 @@ def merge_patches(
         )
 
     item_decisions = read_item_decisions(root, session_id)
+    review_plan = build_review_plan(root, patch_dir=selected_patch_dir)
+    discarded_items = {
+        item
+        for item, entry in review_plan.items.items()
+        if entry.group == "suggested_discard"
+    }
     knowledge = _merge_body(root, selected_patch_dir / "knowledge_patch.md", None)
-    skill = _merge_body(root, selected_patch_dir / "skill_patch.md", None)
-    agent_rules = read_text_if_exists(selected_patch_dir / "agent_rule_patch.md")
+    skill = "" if safe_only else _merge_body(root, selected_patch_dir / "skill_patch.md", None)
+    agent_rules = "" if safe_only else read_text_if_exists(selected_patch_dir / "agent_rule_patch.md")
     registry_file = ensure_registry(root)
     registry_before = read_text_if_exists(registry_file)
     registry_entries = read_registry(registry_path(root))
@@ -284,26 +301,45 @@ def merge_patches(
     skill_file = root / "skills" / f"{session_id}.md"
     agents_file = root / "AGENTS.md"
 
-    if append_marked_section(development_notes, knowledge_marker, knowledge):
+    if knowledge and append_marked_section(development_notes, knowledge_marker, knowledge):
         changed.append(development_notes)
-    if append_marked_section(skill_file, skill_marker, skill):
+    if skill and append_marked_section(skill_file, skill_marker, skill):
         changed.append(skill_file)
-    if append_marked_section(agents_file, agent_marker, agent_rules):
+    if agent_rules and append_marked_section(agents_file, agent_marker, agent_rules):
         changed.append(agents_file)
-    changed.extend(_merge_findings(root, selected_patch_dir, session_id, item_decisions))
-    for unit_dir in UNIT_DIRS:
-        changed.extend(
-            _merge_unit_dir(
-                root,
-                selected_patch_dir,
-                session_id,
-                unit_dir,
-                registry_entries,
-                item_decisions,
-            )
+    changed.extend(
+        _merge_findings(
+            root,
+            selected_patch_dir,
+            session_id,
+            item_decisions,
+            discarded_items,
         )
+    )
+    if not safe_only:
+        for unit_dir in UNIT_DIRS:
+            changed.extend(
+                _merge_unit_dir(
+                    root,
+                    selected_patch_dir,
+                    session_id,
+                    unit_dir,
+                    registry_entries,
+                    item_decisions,
+                    discarded_items,
+                )
+            )
     write_registry(registry_file, registry_entries)
     if read_text_if_exists(registry_file) != registry_before:
         changed.append(registry_file)
 
-    return list(dict.fromkeys(changed))
+    unique_changed = list(dict.fromkeys(changed))
+    proof_report = selected_patch_dir / PROOF_REPORT_FILE
+    if unique_changed or not proof_report.exists():
+        write_proof_report(
+            root,
+            patch_dir=selected_patch_dir,
+            changed_files=unique_changed,
+            merge_mode="knowledge_only" if safe_only else "full",
+        )
+    return unique_changed

@@ -4,6 +4,7 @@ from dataclasses import dataclass, replace
 import re
 from pathlib import Path
 
+from .assurance import build_assurance_report
 from .models import PatchPaths
 from .project import ensure_workspace
 from .registry import (
@@ -1671,4 +1672,5 @@ def distill_session(project: Path, session_dir: Path | None = None) -> PatchPath
     )
     _write_findings(patch_dir, session_id, findings)
     _write_composable_units(patch_dir, session_id, composable_units, merge_suggestions)
+    build_assurance_report(root, patch_dir=patch_dir, force=True)
     return paths

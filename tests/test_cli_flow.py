@@ -9,6 +9,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+from vibewiki.assurance import build_assurance_report
 from vibewiki.capture import capture_session
 from vibewiki.cli import build_parser, run as run_cli
 from vibewiki.control_center import perform_console_action, render_control_center
@@ -37,6 +38,7 @@ from vibewiki.review_board import generate_review_board
 from vibewiki.review_plan import build_review_plan
 from vibewiki.review_ui import (
     _markdown_to_html,
+    perform_review_action,
     render_review_ui,
     revise_candidate_markdown,
     translate_candidate_markdown,
@@ -82,6 +84,8 @@ class VibeWikiFlowTest(unittest.TestCase):
             self.assertIn("primary: zh", config_text)
             self.assertIn("translation:", config_text)
             self.assertIn("provider_env: VIBEWIKI_TRANSLATION_PROVIDER", config_text)
+            self.assertIn("mode: exceptions", config_text)
+            self.assertIn("auto_promote_clear_knowledge: true", config_text)
 
             session = capture_session(
                 root,
@@ -99,6 +103,7 @@ class VibeWikiFlowTest(unittest.TestCase):
             self.assertTrue(patches.agent_rule_patch.exists())
             self.assertTrue(patches.findings_index.exists())
             self.assertTrue(patches.merge_suggestions.exists())
+            self.assertTrue((patches.patch_dir / "assurance.json").exists())
             self.assertTrue((patches.skilllets_dir / "fix-simulator-mismatch.md").exists())
             self.assertIn("Which test", patches.questions.read_text(encoding="utf-8"))
             skill_text = patches.skill_patch.read_text(encoding="utf-8")
@@ -161,6 +166,7 @@ We fixed a repeated simulator setup issue.
             self.assertIn("init", event_types)
             self.assertIn("import-markdown", event_types)
             self.assertIn("distill", event_types)
+            self.assertIn("assurance", event_types)
 
             code, rendered = self.cli(root, "events", "--limit", "5", "--verbose")
             self.assertEqual(code, 0)
@@ -170,7 +176,7 @@ We fixed a repeated simulator setup issue.
             code, rendered_json = self.cli(root, "events", "--json")
             self.assertEqual(code, 0)
             payload = json.loads(rendered_json)
-            self.assertEqual(payload[-1]["type"], "distill")
+            self.assertEqual(payload[-1]["type"], "assurance")
 
     def test_doctor_reports_next_step_without_mutating_workspace(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -799,7 +805,8 @@ python3 compare_outputs.py
             self.assertIn('data-lang-choice="en"', ui_html)
             self.assertIn(">提交<", ui_html)
             self.assertIn(">不提交<", ui_html)
-            self.assertIn("预审整理", ui_html)
+            self.assertIn("记忆质检", ui_html)
+            self.assertIn("只有例外情况需要你处理", ui_html)
             self.assertIn("显示低优先级", ui_html)
             self.assertIn("显示建议不提交", ui_html)
             self.assertIn('data-plan-group="review_now"', ui_html)
@@ -921,6 +928,122 @@ All retry regression tests passed.
             self.assertIn("Fix API Retry Policy", populated_html)
             self.assertIn(f'/review?patch={patches[0].name}', populated_html)
             self.assertIn('name="patch"', render_review_ui(root, patch_dir=patches[0]))
+
+    def test_control_center_auto_promotes_clear_knowledge_with_proof_report(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            init_project(root)
+
+            result = perform_console_action(
+                root,
+                path="/action/capture",
+                data={
+                    "goal": ["Choose the project note format"],
+                    "outcome": ["Keep project notes as plain Markdown in the repository."],
+                    "tests": ["Decision recorded in the captured conversation."],
+                    "auto_distill": ["yes"],
+                },
+            )
+
+            self.assertIn("safe knowledge added automatically", result.message)
+            patch_dir = next((root / ".vibewiki" / "patches").iterdir())
+            report = build_assurance_report(root, patch_dir=patch_dir)
+            self.assertEqual(report.status, "clear")
+            self.assertFalse(report.needs_attention)
+            review = (root / ".vibewiki" / "reviews" / f"{patch_dir.name}.yaml").read_text(
+                encoding="utf-8"
+            )
+            self.assertIn("method: local_assurance", review)
+            proof = json.loads((patch_dir / "proof_report.json").read_text(encoding="utf-8"))
+            self.assertEqual(proof["merge_mode"], "knowledge_only")
+            self.assertEqual(proof["decision"]["method"], "local_assurance")
+            self.assertFalse((root / "skills" / f"{patch_dir.name}.md").exists())
+            self.assertIn(
+                patch_dir.name,
+                (root / "docs" / "wiki" / "development_notes.md").read_text(
+                    encoding="utf-8"
+                ),
+            )
+
+    def test_legacy_human_review_config_does_not_silently_enable_auto_promotion(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            init_project(root)
+            config = root / ".vibewiki" / "config.yaml"
+            config.write_text(
+                config.read_text(encoding="utf-8").replace(
+                    "  mode: exceptions\n"
+                    "  auto_promote_clear_knowledge: true\n"
+                    "  max_candidates_without_attention: 12\n"
+                    "  require_human_approval: skills-conflicts-incomplete\n",
+                    "  require_human_approval: true\n",
+                ),
+                encoding="utf-8",
+            )
+
+            result = perform_console_action(
+                root,
+                path="/action/capture",
+                data={
+                    "goal": ["Record a design choice"],
+                    "outcome": ["Use plain Markdown."],
+                    "tests": ["Decision recorded."],
+                    "auto_distill": ["yes"],
+                },
+            )
+
+            self.assertNotIn("safe knowledge added automatically", result.message)
+            patch_dir = next((root / ".vibewiki" / "patches").iterdir())
+            self.assertFalse(
+                (root / ".vibewiki" / "reviews" / f"{patch_dir.name}.yaml").exists()
+            )
+            self.assertIn("Manual approval is enabled", render_control_center(root))
+
+    def test_assurance_aggregates_reusable_guidance_into_one_exception(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            init_project(root)
+            session = capture_session(
+                root,
+                goal="Run the retry verification",
+                outcome="The retry regression passed.",
+                commands=["python3 -m pytest tests/test_retry.py -q"],
+                tests="1 passed",
+            )
+
+            patches = distill_session(root, session_dir=session.session_dir)
+            report = build_assurance_report(root, patch_dir=patches.patch_dir)
+
+            skill_issues = [issue for issue in report.issues if issue.code == "reusable-guidance"]
+            self.assertEqual(len(skill_issues), 1)
+            self.assertEqual(report.attention_count, 1)
+            self.assertEqual(report.coverage["semantic_consistency"], "not_run")
+            self.assertTrue(skill_issues[0].items[0].startswith("skilllets/"))
+
+            code, output = self.cli(root, "assure", "--patch-dir", str(patches.patch_dir))
+            self.assertEqual(code, 0)
+            self.assertIn("Memory assurance: attention", output)
+            self.assertIn("needs review", output)
+
+            action = perform_review_action(
+                root,
+                patch_dir=patches.patch_dir,
+                path="/approve-and-merge",
+                data={},
+            )
+            self.assertIn("Approved and merged", action.message)
+            proof = json.loads(
+                (patches.patch_dir / "proof_report.json").read_text(encoding="utf-8")
+            )
+            self.assertEqual(proof["merge_mode"], "full")
+            proof_before = (patches.patch_dir / "proof_report.json").read_text(
+                encoding="utf-8"
+            )
+            self.assertEqual(merge_patches(root, patch_dir=patches.patch_dir), [])
+            self.assertEqual(
+                (patches.patch_dir / "proof_report.json").read_text(encoding="utf-8"),
+                proof_before,
+            )
 
     def test_control_center_lists_every_conversation_with_safe_delete_preview(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -1079,7 +1202,7 @@ Use a review plan before showing raw candidates to humans.
             self.assertTrue(plan.path.exists())
             self.assertEqual(plan.payload["summary"]["raw_items"], 3)
             self.assertEqual(plan.items["findings/issue__outcome.md"].group, "suggested_discard")
-            self.assertEqual(plan.items["findings/todo__add-review-plan.md"].group, "review_now")
+            self.assertEqual(plan.items["findings/todo__add-review-plan.md"].group, "suggested_later")
             self.assertEqual(plan.items["skilllets/review-queue-triage.md"].risk, "high")
 
     def test_review_ui_markdown_preview_is_rendered_and_escaped(self) -> None:

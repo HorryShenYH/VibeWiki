@@ -39,6 +39,8 @@ def review_patches(
     patch_dir: Path | None = None,
     approve: bool = False,
     notes: str = "",
+    reviewer: str = "human",
+    method: str = "manual",
 ) -> ReviewPaths:
     root = project.resolve()
     ensure_workspace(root)
@@ -53,6 +55,8 @@ def review_patches(
 reviewed_at: {utcish_timestamp()}
 patch_dir: {selected_patch_dir}
 decision: {decision}
+reviewer: {reviewer or "human"}
+method: {method or "manual"}
 notes: |
   {notes or "none"}
 """,

@@ -8,7 +8,7 @@
   <img alt="Python 3.10+" src="https://img.shields.io/badge/python-3.10%2B-457b9d">
   <img alt="License MIT" src="https://img.shields.io/badge/license-MIT-2a9d8f">
   <img alt="Local first" src="https://img.shields.io/badge/local--first-yes-e9c46a">
-  <img alt="Review first" src="https://img.shields.io/badge/review--first-memory-e76f51">
+  <img alt="Assurance first" src="https://img.shields.io/badge/assurance--first-memory-e76f51">
 </p>
 
 # VibeWiki
@@ -19,7 +19,7 @@
 
 <p align="center">
   Your AI forgot. Your project should not.<br>
-  VibeWiki turns coding conversations into reviewed memory that you, your team,
+  VibeWiki turns coding conversations into source-linked memory that you, your team,
   and every future agent can reuse.
 </p>
 
@@ -44,9 +44,9 @@ vibewiki ui
 ```
 
 Open `http://127.0.0.1:8765/`. Ask what the project already knows, add a past
-conversation, handle the few items that need attention, or inspect project
-memory. The same quiet workspace can also build compact context packs for AI
-agents.
+conversation, handle only the exceptions that need attention, or inspect
+project memory. Low-risk knowledge is checked and added automatically. The same
+quiet workspace can also build compact context packs for AI agents.
 
 For VS Code Remote SSH, forward port `8765` and open the same address locally.
 
@@ -79,13 +79,32 @@ PASTE A CONVERSATION
         ↓
 DISTILL WHAT MATTERS
         ↓
-REVIEW BEFORE TRUST
+ASSURE LOCALLY · REVIEW EXCEPTIONS
         ↓
 ASK IT LATER · GIVE IT TO ANY AGENT
 ```
 
 Every useful fix, decision, command, warning, workflow, and unfinished idea gets
 a durable home without turning raw chat history into unquestioned truth.
+
+## Automatic Without Being Opaque
+
+VibeWiki does not make you approve every extracted sentence. A zero-token local
+assurance pass checks provenance, structure, duplicates, conflicts, and review
+coverage after each distillation:
+
+- ordinary source-linked knowledge is promoted automatically
+- reusable skills, conflicting memories, incomplete provenance, and suspicious
+  over-distillation appear in Attention
+- repeated findings collapse into one exception instead of a long review queue
+- every merge writes a Proof Report with source, candidate, output hashes, and
+  the decision method
+
+The report says when semantic review was not run. It proves which memory
+snapshot was processed; it does not pretend that software guaranteed every
+claim. This approach borrows the strongest assurance ideas from
+[Recensa](docs/research_recensa.md) without spending three model calls on every
+conversation.
 
 ## Why Developers Care
 
@@ -94,7 +113,7 @@ a durable home without turning raw chat history into unquestioned truth.
 | Search through old chat tabs | Ask one project memory |
 | Explain the same context to every agent | Let the agent retrieve approved memory itself |
 | Let knowledge disappear when a teammate leaves | Keep reviewed memory in the repository |
-| Trust opaque automatic memory | See the source, recorder, status, and confidence |
+| Trust opaque automatic memory | See the source, recorder, assurance status, and confidence |
 | Spend tokens rediscovering old answers | Reuse what the team already paid to learn |
 
 ## Personal Memory And Project Memory
@@ -124,7 +143,7 @@ See [`docs/ecosystem.md`](docs/ecosystem.md) for the fuller ecosystem stance.
 | Output | Human value | Agent value |
 | --- | --- | --- |
 | Memory cards | quick answers with source, actor, and confidence | compact facts instead of long chat logs |
-| Review dashboard | see candidate memory, backlog, and next command | exposes what is trusted vs still candidate |
+| Attention ledger | review only skills, conflicts, and incomplete evidence | exposes what is trusted vs still candidate |
 | Wiki patches | durable project notes | stable context for future tasks |
 | Skilllets and workflows | reusable team procedures | composable task instructions |
 | Context packs | share just enough background | JSON/YAML input for coding agents |
@@ -138,7 +157,7 @@ The control center is the primary interface:
 - paste a conversation or import a shared link
 - browse and search every imported conversation in one library
 - remove a conversation with a Wiki impact preview and recoverable Trash archive
-- generate and review candidate memory
+- generate memory automatically and review only flagged exceptions
 - ask questions or build context for the next AI agent
 
 <details>
@@ -156,6 +175,7 @@ The control center is the primary interface:
 - `vibewiki import-url` imports a shared conversation URL, including ChatGPT share links.
 - `vibewiki distill` creates candidate memory patches.
 - `vibewiki review-plan` groups raw candidates into a smaller review queue.
+- `vibewiki assure` runs local checks and prints the compact exception ledger.
 - `vibewiki review-board` renders a local HTML review board for candidate patches.
 - `vibewiki review-ui` serves a clickable local review UI for SSH/remote workflows.
 - `vibewiki dashboard` renders a local HTML dashboard with memory and review charts.
@@ -172,9 +192,10 @@ The control center is the primary interface:
 
 </details>
 
-VibeWiki does not directly mutate your main knowledge base before review. Facts
-start as candidates, uncertain claims stay marked, and missing context becomes
-questions for a human.
+VibeWiki keeps raw candidates and source evidence before promotion. In the
+default `exceptions` mode, ordinary knowledge can enter the Wiki after local
+assurance; skills, conflicts, incomplete provenance, and unusually large
+candidate sets remain blocked for human attention.
 
 VibeWiki can run in bilingual mode. The default project configuration keeps the
 user's working language while adding brief bilingual structure for Wiki pages
@@ -211,8 +232,8 @@ It creates reviewable artifacts:
 - Agent Rules for future coding agents
 - clarification questions for anything that is still uncertain
 
-The important bit: it keeps raw evidence, asks for human approval, and only then
-merges knowledge into the project.
+The important bit: it keeps raw evidence, separates generation from assurance,
+and spends human attention only where a wrong memory could compound later.
 
 When approved units are merged, VibeWiki updates `.vibewiki/skill_registry.yaml`.
 Later sessions use that registry to update existing skilllets by exact slug or
@@ -327,10 +348,16 @@ registry evidence remain in place.
 
 ![VibeWiki conversation import and provenance-aware conversation library](docs/assets/conversation-library.png)
 
-`review-board` writes a static `review_board.html` beside the selected patch. It
-groups findings, candidate skilllets, prompt patterns, workflows, open
-questions, merge suggestions, and approve/merge commands into one page so review
-does not require opening a directory full of Markdown files one by one.
+Every distillation writes `assurance.json` beside the selected patch. It checks
+source linkage, conflicts, duplicate candidates, incomplete coverage, and
+candidate volume without an API call. Run the same check directly with:
+
+```bash
+vibewiki assure --patch-dir .vibewiki/patches/<session>
+```
+
+`review-board` can still write a static `review_board.html` for audit or offline
+inspection.
 
 For remote development over SSH, `review-ui` is usually easier than opening the
 static HTML. It starts a local-only server that VSCode Remote-SSH can forward to
@@ -341,14 +368,15 @@ vibewiki review-ui --patch-dir .vibewiki/patches/<session> --port 8765
 ```
 
 Open `http://127.0.0.1:8765/` after forwarding the port. Before rendering, the
-UI writes a machine-readable `.vibewiki/patches/<session>/review_plan.json`.
-That plan keeps every raw candidate, but defaults the page to a smaller review
-batch and hides lower-priority or suggested-discard items behind switches.
+UI reads the machine-readable assurance report and shows why human attention is
+needed. It keeps every raw candidate, but defaults the page to reusable skills
+or conflict-shaped exceptions; lower-priority and duplicate candidates stay
+behind switches.
 
-The page keeps review deliberately small: preview a candidate, submit it,
-discard it, edit the candidate Markdown directly, or write a short revision
-instruction and let the configured LLM generate a revised candidate. The LLM
-only rewrites the draft; the human still decides whether to submit it.
+The page keeps review deliberately small: inspect the flagged candidate, submit
+or discard it, edit the Markdown directly, or write a short revision instruction
+and let the configured LLM generate a revised candidate. The LLM only rewrites
+the draft; the human still decides whether to submit it.
 Candidate Markdown is previewed as rendered Markdown by default, and the review
 surface can switch between Chinese and English labels while keeping the
 underlying Markdown memory in English. For reviewers who prefer another
@@ -358,7 +386,7 @@ rewrites the source candidate. Translation is token-conscious by default:
 VibeWiki prefers a free LibreTranslate-compatible API or local Argos Translate,
 and only uses an LLM when `VIBEWIKI_TRANSLATION_PROVIDER=llm` is set explicitly.
 
-You can inspect or regenerate the triage plan from the terminal:
+You can inspect the lower-level candidate classification from the terminal:
 
 ```bash
 vibewiki review-plan --patch-dir .vibewiki/patches/<session>

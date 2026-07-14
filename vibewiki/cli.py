@@ -7,8 +7,9 @@ from pathlib import Path
 
 from .agent_install import format_agent_install_result, install_agent_bridge
 from .agent_memory import guard_agent_task
+from .assurance import build_assurance_report, format_assurance_summary
 from .capture import capture_session
-from .control_center import serve_control_center
+from .control_center import finalize_distill, serve_control_center
 from .dashboard import generate_dashboard
 from .distill import distill_session
 from .doctor import build_doctor_report, format_doctor_report
@@ -59,7 +60,7 @@ def _prompt(label: str, current: str = "") -> str:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="vibewiki",
-        description="Turn AI conversations into reviewed personal and project memory.",
+        description="Turn AI conversations into source-linked personal and project memory.",
     )
     parser.add_argument(
         "--project",
@@ -230,6 +231,13 @@ def build_parser() -> argparse.ArgumentParser:
         default=8,
         help="Maximum unreviewed items shown by default. Defaults to 8.",
     )
+
+    assure = subparsers.add_parser(
+        "assure",
+        help="Run local memory assurance and print the compact exception ledger.",
+    )
+    assure.add_argument("--patch-dir", default=None, help="Specific patch directory to check.")
+    assure.add_argument("--force", action="store_true", help="Rebuild even if the report is current.")
 
     review_ui = subparsers.add_parser(
         "review-ui",
@@ -467,12 +475,20 @@ def run(args: argparse.Namespace) -> int:
         print(f"- {paths.skilllets_dir}")
         print(f"- {paths.prompt_patterns_dir}")
         print(f"- {paths.workflows_dir}")
+        report = build_assurance_report(project, patch_dir=paths.patch_dir)
+        print(f"- {report.path}")
+        print(format_assurance_summary(report))
         append_event(
             project,
             "distill",
             subject=paths.session_id,
             data={"patch_dir": str(paths.patch_dir), "session_dir": str(session_dir or "")},
         )
+        automation = finalize_distill(project, paths.patch_dir, source="cli")
+        if automation.auto_promoted:
+            print("Safe knowledge added automatically.")
+        elif automation.attention_count:
+            print(f"{automation.attention_count} exception(s) need attention.")
         return 0
 
     if args.subcommand == "import-markdown":
@@ -611,6 +627,32 @@ def run(args: argparse.Namespace) -> int:
                 "path": str(plan.path),
                 "summary": plan.payload.get("summary", {}),
             },
+        )
+        return 0
+
+    if args.subcommand == "assure":
+        patch_dir = _path(args.patch_dir) if args.patch_dir else None
+        if patch_dir is None:
+            patch_dirs = sorted(
+                path
+                for path in (project / ".vibewiki" / "patches").glob("*")
+                if path.is_dir()
+            )
+            if not patch_dirs:
+                raise FileNotFoundError("No candidate memory exists yet.")
+            patch_dir = patch_dirs[-1]
+        report = build_assurance_report(
+            project,
+            patch_dir=patch_dir,
+            force=args.force,
+        )
+        print(format_assurance_summary(report))
+        print(f"- report: {report.path}")
+        append_event(
+            project,
+            "assurance",
+            subject=report.session_id,
+            data={"status": report.status, "attention": report.attention_count},
         )
         return 0
 

@@ -3,7 +3,7 @@
 VibeWiki is designed to complement the AI coding ecosystem, not replace it.
 
 The project borrows openly from tools that already do important parts of the
-workflow well. VibeWiki's job is to add a reviewed memory lifecycle around those
+workflow well. VibeWiki's job is to add an assured memory lifecycle around those
 tools.
 
 ## Repository Ingestion
@@ -16,7 +16,7 @@ VibeWiki adds:
 
 - project briefs that become part of the Wiki
 - follow-up questions and missing verification notes
-- a path from repository understanding to reviewed memory
+- a path from repository understanding to source-linked, assured memory
 
 Planned integration shape:
 
@@ -35,7 +35,7 @@ VibeWiki adds:
 
 - evidence from actual work, not only static code
 - commands, tests, diffs, and failure modes
-- human review before permanent documentation changes
+- local assurance for ordinary knowledge and human review for risky guidance
 - repeated-session updates to the same skilllet or workflow
 
 Short version:
@@ -68,7 +68,7 @@ are becoming standard ways to give agents durable guidance.
 VibeWiki adds:
 
 - evidence-backed generation of those instructions
-- review records before promotion
+- assurance and review records before promotion
 - skill evolution logs
 - downgrade paths when something is useful knowledge but not a procedure
 
@@ -86,10 +86,26 @@ knowledge.
 VibeWiki adds the compiler:
 
 ```text
-AI collaboration trace -> typed candidate memory -> reviewed Wiki update
+AI collaboration trace -> typed candidate memory -> assurance -> Wiki update
 ```
 
 The storage should stay boring and portable. The lifecycle is the product.
+
+## Assurance Systems
+
+Recensa demonstrates a useful separation between generation and assurance:
+structured findings, duplicate collapse, visible disagreement, honest partial
+status, and a proof artifact that does not claim correctness.
+
+VibeWiki applies that discipline to project memory with a cheaper default:
+
+```text
+local structural checks -> compact exception ledger -> targeted human review
+```
+
+Multi-model semantic review may be useful for high-impact skills or unresolved
+conflicts, but it should remain optional rather than charging every conversation
+three times. See `docs/research_recensa.md`.
 
 ## Design Principle
 
@@ -99,5 +115,5 @@ ones where it makes sense. Its differentiator is not owning every step.
 Its differentiator is:
 
 ```text
-evidence-backed, review-first, tool-agnostic, evolving memory
+evidence-backed, assurance-first, tool-agnostic, evolving memory
 ```

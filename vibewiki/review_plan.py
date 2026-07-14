@@ -135,46 +135,10 @@ def _build_payload(
             duplicate_by_key[duplicate_key] = candidate.item
         raw_entries.append(_classify_candidate(candidate, duplicate_of=duplicate_of))
 
-    visible_entries = [entry for entry in raw_entries if entry.group != "suggested_discard"]
-    visible_entries = sorted(visible_entries, key=lambda entry: (-entry.score, entry.item))
-    review_now = {entry.item for entry in visible_entries[: max(1, review_limit)]}
-
-    entries: list[ReviewPlanEntry] = []
-    for entry in raw_entries:
-        if entry.group == "suggested_discard":
-            entries.append(entry)
-            continue
-        if entry.item in review_now:
-            entries.append(
-                ReviewPlanEntry(
-                    item=entry.item,
-                    title=entry.title,
-                    kind=entry.kind,
-                    recommendation="review_now",
-                    group="review_now",
-                    risk=entry.risk,
-                    reason=entry.reason,
-                    score=entry.score,
-                    duplicate_of=entry.duplicate_of,
-                )
-            )
-            continue
-        entries.append(
-            ReviewPlanEntry(
-                item=entry.item,
-                title=entry.title,
-                kind=entry.kind,
-                recommendation="suggested_later",
-                group="suggested_later",
-                risk="low" if entry.risk == "medium" else entry.risk,
-                reason=(
-                    "Lower priority after the first review batch; preserved as a raw candidate "
-                    "and hidden by default to reduce review load."
-                ),
-                score=entry.score,
-                duplicate_of=entry.duplicate_of,
-            )
-        )
+    # The limit is no longer used to fill a review quota. Only exception-shaped
+    # items enter review; ordinary knowledge stays available without creating
+    # artificial human work.
+    entries = raw_entries
 
     summary = {
         "raw_items": len(entries),
@@ -270,28 +234,38 @@ def _classify_candidate(candidate: CandidateItem, *, duplicate_of: str = "") -> 
         )
 
     if kind == "todo":
-        score = 82 if _looks_actionable(title_lower, body_lower) else 58
         return ReviewPlanEntry(
             item=candidate.item,
             title=title,
             kind=kind,
-            recommendation="review_now",
-            group="review_now",
-            risk="medium",
-            reason="Actionable project follow-up; review whether it belongs in the backlog.",
-            score=score,
+            recommendation="suggested_later",
+            group="suggested_later",
+            risk="low",
+            reason="Project follow-up can be kept as source-linked knowledge without item-level review.",
+            score=58 if _looks_actionable(title_lower, body_lower) else 40,
         )
 
     if kind in {"issue", "direction", "research_note"}:
+        if _has_conflict_cue(title_lower, body_lower):
+            return ReviewPlanEntry(
+                item=candidate.item,
+                title=title,
+                kind=kind,
+                recommendation="review_now",
+                group="review_now",
+                risk="high",
+                reason="The candidate signals a conflict or contradiction that should stay visible for human resolution.",
+                score=90,
+            )
         return ReviewPlanEntry(
             item=candidate.item,
             title=title,
             kind=kind,
-            recommendation="review_now",
-            group="review_now",
-            risk="medium",
-            reason="Decision-shaped memory; human review should decide whether it is durable.",
-            score=78,
+            recommendation="suggested_later",
+            group="suggested_later",
+            risk="low",
+            reason="Source-linked project memory; no item-level review is needed unless it conflicts with existing memory.",
+            score=55,
         )
 
     if kind == "knowledge":
@@ -300,10 +274,10 @@ def _classify_candidate(candidate: CandidateItem, *, duplicate_of: str = "") -> 
                 item=candidate.item,
                 title=title,
                 kind=kind,
-                recommendation="review_now",
-                group="review_now",
-                risk="medium",
-                reason="Knowledge candidate includes concrete evidence such as code, commands, paths, or metrics.",
+                recommendation="suggested_later",
+                group="suggested_later",
+                risk="low",
+                reason="Concrete source evidence makes this suitable for automatic knowledge promotion.",
                 score=72,
             )
         return ReviewPlanEntry(
@@ -339,6 +313,21 @@ def _classify_candidate(candidate: CandidateItem, *, duplicate_of: str = "") -> 
         reason="Unrecognized candidate type; preserved for audit and hidden from the default queue.",
         score=30,
     )
+
+
+def _has_conflict_cue(title_lower: str, body_lower: str) -> bool:
+    cues = (
+        " conflict",
+        "conflict ",
+        "contradict",
+        "inconsistent with",
+        "disagrees with",
+        "冲突",
+        "矛盾",
+        "与已有",
+    )
+    text = f" {title_lower} {body_lower[:1200]} "
+    return any(cue in text for cue in cues)
 
 
 def _payload_to_plan(path: Path, payload: dict[str, object]) -> ReviewPlan:

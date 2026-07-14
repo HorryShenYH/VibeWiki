@@ -13,7 +13,10 @@ language:
   secondary: en
   write_policy: keep-user-language-with-brief-bilingual-summary
 review:
-  require_human_approval: true
+  mode: exceptions
+  auto_promote_clear_knowledge: true
+  max_candidates_without_attention: 12
+  require_human_approval: skills-conflicts-incomplete
 distill:
   mode: local
   uncertain_by_default: true
