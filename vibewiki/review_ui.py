@@ -1078,6 +1078,11 @@ def _i18n(en: str, zh: str) -> str:
     return f'<span data-i18n data-en="{_escape(en)}" data-zh="{_escape(zh)}">{_escape(zh)}</span>'
 
 
+def render_markdown_html(text: str) -> str:
+    """Render the safe Markdown subset shared by review and conversation views."""
+    return _markdown_to_html(text)
+
+
 def _markdown_to_html(text: str) -> str:
     lines = text.splitlines()
     html_lines: list[str] = []

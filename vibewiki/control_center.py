@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 import html
+import json
 from http.server import BaseHTTPRequestHandler
 from pathlib import Path
 import secrets
@@ -18,8 +19,11 @@ from .capture import capture_session
 from .conversations import (
     ConversationRecord,
     delete_conversation,
+    get_conversation_detail,
     list_conversations,
     plan_conversation_deletion,
+    search_conversations,
+    update_conversation_flags,
 )
 from .dashboard import DashboardData, build_dashboard_data
 from .distill import distill_session, parse_sections
@@ -38,7 +42,7 @@ from .project import ensure_workspace
 from .project_understanding import build_project_brief, render_project_brief_markdown
 from .retrieval import answer_question, build_context_pack, load_retrieval_config
 from .review import read_item_decisions, review_patches
-from .review_ui import perform_review_action, render_review_ui
+from .review_ui import perform_review_action, render_markdown_html, render_review_ui
 from .text_utils import read_text_if_exists, slugify, utcish_timestamp
 
 
@@ -504,7 +508,7 @@ def render_control_center(
     .icon-button svg {{ width: 15px; height: 15px; }}
     .settings-trigger {{ border-color: transparent; background: transparent; }}
     .settings-trigger:hover {{ border-color: var(--line); background: #fff; }}
-    .main {{ width: 100%; max-width: 1180px; margin: 0 auto; padding: 40px 30px 72px; }}
+    .main {{ width: 100%; max-width: 1420px; margin: 0 auto; padding: 40px 30px 72px; }}
     .message {{ max-width: 980px; margin: 0 auto 22px; }}
     [data-view-panel] {{ display: none; }}
     .app[data-active-view="ask"] [data-view-panel="ask"],
@@ -573,14 +577,66 @@ def render_control_center(
     .conversation-workspace {{
       grid-column: 1 / -1;
       width: 100%;
-      grid-template-columns: minmax(0, 1.08fr) minmax(360px, .92fr);
-      gap: 16px;
+      grid-template-columns: minmax(280px, .78fr) minmax(380px, 1.24fr) minmax(300px, .86fr);
+      gap: 14px;
       align-items: start;
     }}
     .app[data-active-view="add"] .conversation-workspace {{ display: grid; }}
     .conversation-workspace .panel {{ margin-top: 28px; }}
-    .import-panel textarea {{ min-height: 236px; }}
-    .conversation-library {{ min-width: 0; }}
+    .import-panel .form-grid {{ grid-template-columns: 1fr; }}
+    .import-panel textarea {{ min-height: 216px; }}
+    .conversation-reader, .conversation-library {{ min-width: 0; }}
+    .conversation-reader {{ min-height: 650px; }}
+    .reader-heading {{ min-width: 0; }}
+    .reader-heading h2 {{ overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }}
+    .reader-heading small {{ display: block; margin-top: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }}
+    .reader-empty {{ min-height: 585px; display: grid; place-items: center; padding: 28px; color: var(--muted); text-align: center; }}
+    .reader-empty[hidden], .reader-body[hidden] {{ display: none; }}
+    .reader-meta {{
+      min-height: 43px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 16px;
+      border-bottom: 1px solid var(--line);
+      color: var(--subtle);
+      font-size: 10px;
+      overflow: hidden;
+    }}
+    .reader-meta span {{ overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }}
+    .reader-transcript {{
+      height: 470px;
+      padding: 22px 24px 32px;
+      overflow: auto;
+      overscroll-behavior: contain;
+      background: #fff;
+    }}
+    .reader-transcript h1 {{ margin: 0 0 18px; font-size: 24px; line-height: 1.18; }}
+    .reader-transcript h2 {{ margin: 28px 0 10px; font-size: 18px; }}
+    .reader-transcript h3, .reader-transcript h4 {{ margin: 22px 0 8px; font-size: 15px; }}
+    .reader-transcript p, .reader-transcript li, .reader-transcript blockquote {{ color: #34373a; font-size: 13px; line-height: 1.68; }}
+    .reader-transcript p {{ margin: 0 0 12px; }}
+    .reader-transcript ul, .reader-transcript ol {{ margin: 8px 0 16px; padding-left: 22px; }}
+    .reader-transcript blockquote {{ margin: 14px 0; padding: 2px 0 2px 14px; border-left: 2px solid var(--teal); color: var(--muted); }}
+    .reader-transcript code {{ padding: 2px 5px; border-radius: 5px; background: #eef1f3; font: 12px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace; }}
+    .reader-transcript pre {{ max-height: none; margin: 14px 0; }}
+    .reader-transcript pre code {{ padding: 0; background: transparent; color: inherit; }}
+    .reader-impact {{
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      border-top: 1px solid var(--line);
+      border-bottom: 1px solid var(--line);
+      background: #f8f9fa;
+    }}
+    .reader-impact span {{ padding: 10px 13px; border-right: 1px solid var(--line); color: var(--subtle); font-size: 9px; }}
+    .reader-impact span:last-child {{ border-right: 0; }}
+    .reader-impact b {{ display: block; margin-bottom: 2px; color: var(--ink); font-size: 15px; }}
+    .conversation-curation summary {{ padding: 12px 16px; cursor: pointer; color: var(--muted); font-size: 11px; font-weight: 650; }}
+    .curation-form {{ display: grid; gap: 10px; padding: 0 16px 16px; }}
+    .curation-grid {{ display: grid; grid-template-columns: 1fr 1fr; gap: 9px; }}
+    .curation-form textarea {{ min-height: 74px; }}
+    .curation-actions {{ display: flex; align-items: center; justify-content: space-between; gap: 10px; }}
+    .curation-actions .check {{ color: var(--ink); }}
     .conversation-tools {{ padding: 12px 16px; border-bottom: 1px solid var(--line); }}
     .conversation-search {{ position: relative; display: block; }}
     .conversation-search svg {{ position: absolute; left: 11px; top: 50%; width: 15px; height: 15px; color: var(--subtle); transform: translateY(-50%); pointer-events: none; }}
@@ -589,13 +645,25 @@ def render_control_center(
     .conversation-row {{
       min-width: 0;
       display: grid;
-      grid-template-columns: minmax(0, 1fr) auto;
-      gap: 12px;
-      padding: 15px 16px;
+      grid-template-columns: minmax(0, 1fr) 38px;
       border-bottom: 1px solid var(--line);
+      transition: background-color .14s ease, box-shadow .14s ease;
     }}
     .conversation-row:last-child {{ border-bottom: 0; }}
     .conversation-row[hidden] {{ display: none; }}
+    .conversation-row.selected {{ background: #f1f7f6; box-shadow: inset 2px 0 var(--teal); }}
+    .conversation-open {{
+      min-width: 0;
+      min-height: 104px;
+      padding: 14px 8px 14px 16px;
+      border: 0;
+      border-radius: 0;
+      background: transparent;
+      text-align: left;
+      white-space: normal;
+      box-shadow: none;
+    }}
+    .conversation-open:hover {{ border: 0; background: rgba(19,127,119,.04); }}
     .conversation-copy {{ min-width: 0; }}
     .conversation-title-line {{ display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }}
     .conversation-title-line strong {{ min-width: 0; overflow: hidden; color: var(--ink); font-size: 13px; font-weight: 660; text-overflow: ellipsis; white-space: nowrap; }}
@@ -612,6 +680,8 @@ def render_control_center(
     }}
     .conversation-meta {{ display: flex; align-items: center; gap: 7px; flex-wrap: wrap; color: var(--subtle); font-size: 9px; }}
     .conversation-meta .status {{ padding: 2px 6px; font-size: 9px; }}
+    .pin-mark {{ display: inline-flex; align-items: center; gap: 3px; color: #9a6d12; }}
+    .pin-mark svg {{ width: 11px; height: 11px; fill: currentColor; }}
     .delete-trigger {{
       width: 32px;
       min-width: 32px;
@@ -626,6 +696,8 @@ def render_control_center(
     }}
     .delete-trigger svg {{ width: 15px; height: 15px; }}
     .delete-trigger:hover {{ border-color: rgba(196,63,79,.18); background: #fff3f4; color: var(--danger); }}
+    .delete-trigger:disabled {{ cursor: not-allowed; color: #b28325; opacity: .72; }}
+    .delete-trigger:disabled:hover {{ border-color: transparent; background: transparent; }}
     .conversation-empty {{ display: none; }}
     .conversation-empty.visible {{ display: block; }}
     .queue-row {{ min-height: 68px; grid-template-columns: minmax(0, 1fr) auto auto; padding: 13px 20px; }}
@@ -674,6 +746,11 @@ def render_control_center(
     button.danger {{ border-color: var(--danger); background: var(--danger); color: #fff; }}
     button.danger:hover {{ border-color: #ad3342; background: #ad3342; }}
 
+    @media (max-width: 1180px) {{
+      .conversation-workspace {{ grid-template-columns: minmax(0, 1.15fr) minmax(300px, .85fr); }}
+      .import-panel {{ grid-column: 1 / -1; }}
+      .import-panel .form-grid {{ grid-template-columns: 1fr 1fr; }}
+    }}
     @media (max-width: 900px) {{
       .sidebar {{ height: auto; min-height: 64px; grid-template-columns: auto 1fr auto; gap: 12px; padding: 9px 16px; }}
       nav a {{ padding: 8px; }}
@@ -681,7 +758,9 @@ def render_control_center(
       .memory-state {{ display: none; }}
       .columns {{ grid-template-columns: 1fr; }}
       .conversation-workspace {{ grid-template-columns: 1fr; }}
-      .conversation-library {{ margin-top: 0 !important; }}
+      .import-panel {{ order: 1; }}
+      .conversation-library {{ order: 2; margin-top: 0 !important; }}
+      .conversation-reader {{ order: 3; margin-top: 0 !important; }}
       .memory-panel, .memory-insights {{ grid-column: 1; }}
       .memory-insights {{ margin-top: 0; }}
     }}
@@ -701,7 +780,9 @@ def render_control_center(
       .connection {{ font-size: 9px; }}
       .system-strip {{ grid-template-columns: repeat(2, minmax(0,1fr)); }}
       .bridge-state {{ justify-content: flex-start; }}
-      .form-grid {{ grid-template-columns: 1fr; }}
+      .form-grid, .import-panel .form-grid, .curation-grid {{ grid-template-columns: 1fr; }}
+      .import-panel .tabs button {{ min-width: 0; padding: 5px 4px; font-size: 10px; white-space: normal; }}
+      .reader-transcript {{ padding: 19px 18px 28px; }}
       .queue-row {{ grid-template-columns: 1fr auto; }}
       .queue-row .status {{ display: none; }}
       .model-dialog {{ width: min(560px, calc(100vw - 24px)); }}
@@ -851,6 +932,49 @@ def render_control_center(
                     </div>
                   </form>
                 </div>
+              </div>
+            </section>
+
+            <section class="panel conversation-reader" data-conversation-reader aria-live="polite">
+              <div class="panel-head">
+                <div class="reader-heading">
+                  <h2 data-reader-title>{_i18n("Select a conversation", "选择一段对话")}</h2>
+                  <small data-reader-subtitle>{_i18n("Read the source before trusting the memory.", "在信任记忆前先查看原始内容。")}</small>
+                </div>
+              </div>
+              <div class="reader-empty" data-reader-empty>
+                <span>{_i18n("Choose a conversation from the library.", "从对话库中选择一段对话。")}</span>
+              </div>
+              <div class="reader-body" data-reader-body hidden>
+                <div class="reader-meta">
+                  <span data-reader-source></span>
+                  <span>·</span>
+                  <span data-reader-actor></span>
+                  <span>·</span>
+                  <span data-reader-file></span>
+                </div>
+                <div class="reader-transcript" data-reader-transcript></div>
+                <div class="reader-impact">
+                  <span><b data-reader-memories>0</b>{_i18n("Memory blocks", "记忆块")}</span>
+                  <span><b data-reader-files>0</b>{_i18n("Memory files", "记忆文件")}</span>
+                  <span><b data-reader-shared>0</b>{_i18n("Shared files", "共同来源文件")}</span>
+                </div>
+                <details class="conversation-curation">
+                  <summary>{_i18n("Pin, rename, tag or note", "置顶、重命名、标签或备注")}</summary>
+                  <form class="curation-form" method="post" action="/action/conversation-flags">
+                    <input type="hidden" name="csrf_token" value="{_escape(csrf_token)}">
+                    <input type="hidden" name="session" value="" data-curation-session>
+                    <div class="curation-grid">
+                      <label>{_i18n("Display title", "显示标题")}<input name="custom_title" maxlength="160" data-curation-title></label>
+                      <label>{_i18n("Tags", "标签")}<input name="tags" data-curation-tags data-placeholder-en="debug, architecture" data-placeholder-zh="调试, 架构" placeholder="debug, architecture"></label>
+                    </div>
+                    <label>{_i18n("Private note", "私人备注")}<textarea name="note" maxlength="2000" data-curation-note></textarea></label>
+                    <div class="curation-actions">
+                      <label class="check"><input type="checkbox" name="pinned" value="yes" data-curation-pinned> {_i18n("Keep at top", "置顶保留")}</label>
+                      <button class="primary" type="submit">{_i18n("Save", "保存")}</button>
+                    </div>
+                  </form>
+                </details>
               </div>
             </section>
 
@@ -1064,16 +1188,122 @@ def render_control_center(
 
       const conversationSearch = document.querySelector("[data-conversation-search]");
       const conversationRows = Array.from(document.querySelectorAll("[data-conversation-row]"));
+      const conversationButtons = Array.from(document.querySelectorAll("[data-conversation-open]"));
       const conversationEmpty = document.querySelector("[data-conversation-empty]");
-      conversationSearch?.addEventListener("input", () => {{
-        const query = (conversationSearch.value || "").trim().toLocaleLowerCase();
-        let visible = 0;
+      const originalPreviews = new Map(
+        conversationRows.map((row) => [row.dataset.session || "", row.querySelector("[data-conversation-preview]")?.textContent || ""])
+      );
+      const readerEmpty = document.querySelector("[data-reader-empty]");
+      const readerBody = document.querySelector("[data-reader-body]");
+      const readerTitle = document.querySelector("[data-reader-title]");
+      const readerSubtitle = document.querySelector("[data-reader-subtitle]");
+      const readerSource = document.querySelector("[data-reader-source]");
+      const readerActor = document.querySelector("[data-reader-actor]");
+      const readerFile = document.querySelector("[data-reader-file]");
+      const readerTranscript = document.querySelector("[data-reader-transcript]");
+      const readerMemories = document.querySelector("[data-reader-memories]");
+      const readerFiles = document.querySelector("[data-reader-files]");
+      const readerShared = document.querySelector("[data-reader-shared]");
+      const curationSession = document.querySelector("[data-curation-session]");
+      const curationTitle = document.querySelector("[data-curation-title]");
+      const curationTags = document.querySelector("[data-curation-tags]");
+      const curationNote = document.querySelector("[data-curation-note]");
+      const curationPinned = document.querySelector("[data-curation-pinned]");
+
+      let conversationRequest = 0;
+      async function openConversation(button) {{
+        const session = button.dataset.session || "";
+        if (!session) return;
+        const request = ++conversationRequest;
         conversationRows.forEach((row) => {{
-          const matches = !query || (row.dataset.search || "").toLocaleLowerCase().includes(query);
-          row.hidden = !matches;
-          if (matches) visible += 1;
+          const selected = row.dataset.session === session;
+          row.classList.toggle("selected", selected);
+          row.querySelector("[data-conversation-open]")?.setAttribute("aria-pressed", String(selected));
         }});
-        conversationEmpty?.classList.toggle("visible", conversationRows.length > 0 && visible === 0);
+        if (readerTitle) readerTitle.textContent = button.querySelector("strong")?.textContent || session;
+        if (readerSubtitle) readerSubtitle.textContent = document.documentElement.lang === "zh" ? "正在读取原始对话..." : "Loading source conversation...";
+        if (readerEmpty) readerEmpty.hidden = true;
+        if (readerBody) readerBody.hidden = true;
+        try {{
+          const response = await fetch("/api/conversation?session=" + encodeURIComponent(session));
+          if (!response.ok) throw new Error("HTTP " + response.status);
+          const data = await response.json();
+          if (request !== conversationRequest) return;
+          const conversation = data.conversation || {{}};
+          const impact = data.impact || {{}};
+          if (readerTitle) readerTitle.textContent = conversation.title || session;
+          if (readerSubtitle) readerSubtitle.textContent = conversation.created_at || session;
+          if (readerSource) readerSource.textContent = conversation.source || "";
+          if (readerActor) readerActor.textContent = "@" + (conversation.recorded_by || "unknown");
+          if (readerFile) readerFile.textContent = data.transcript_file || "session.md";
+          if (readerTranscript) readerTranscript.innerHTML = data.transcript_html || "<p>No transcript content.</p>";
+          if (readerMemories) readerMemories.textContent = String(impact.memory_blocks || 0);
+          if (readerFiles) readerFiles.textContent = String((impact.memory_files || []).length);
+          if (readerShared) readerShared.textContent = String((impact.shared_files || []).length);
+          if (curationSession) curationSession.value = session;
+          if (curationTitle) curationTitle.value = conversation.custom_title || "";
+          if (curationTags) curationTags.value = (conversation.tags || []).join(", ");
+          if (curationNote) curationNote.value = conversation.note || "";
+          if (curationPinned) curationPinned.checked = Boolean(conversation.pinned);
+          if (readerBody) readerBody.hidden = false;
+        }} catch (error) {{
+          if (request !== conversationRequest) return;
+          if (readerEmpty) {{
+            readerEmpty.hidden = false;
+            readerEmpty.textContent = document.documentElement.lang === "zh" ? "无法读取这段对话。" : "Could not load this conversation.";
+          }}
+          if (readerSubtitle) readerSubtitle.textContent = String(error);
+        }}
+      }}
+
+      conversationButtons.forEach((button) => button.addEventListener("click", () => void openConversation(button)));
+      if (conversationButtons.length) void openConversation(conversationButtons[0]);
+
+      let conversationSearchTimer = 0;
+      let conversationSearchRequest = 0;
+      conversationSearch?.addEventListener("input", () => {{
+        const request = ++conversationSearchRequest;
+        globalThis.clearTimeout(conversationSearchTimer);
+        conversationSearchTimer = globalThis.setTimeout(async () => {{
+          const query = (conversationSearch.value || "").trim();
+          if (!query) {{
+            conversationRows.forEach((row) => {{
+              row.hidden = false;
+              const preview = row.querySelector("[data-conversation-preview]");
+              if (preview) preview.textContent = originalPreviews.get(row.dataset.session || "") || "";
+            }});
+            conversationEmpty?.classList.remove("visible");
+            return;
+          }}
+          try {{
+            const response = await fetch("/api/conversations/search?q=" + encodeURIComponent(query));
+            if (!response.ok) throw new Error("HTTP " + response.status);
+            const hits = await response.json();
+            if (request !== conversationSearchRequest) return;
+            const bySession = new Map(hits.map((hit) => [hit.session_id, hit]));
+            let visible = 0;
+            conversationRows.forEach((row) => {{
+              const hit = bySession.get(row.dataset.session || "");
+              row.hidden = !hit;
+              if (hit) {{
+                visible += 1;
+                const preview = row.querySelector("[data-conversation-preview]");
+                if (preview) preview.textContent = hit.snippet || originalPreviews.get(row.dataset.session || "") || "";
+              }}
+            }});
+            conversationEmpty?.classList.toggle("visible", conversationRows.length > 0 && visible === 0);
+          }} catch {{
+            if (request !== conversationSearchRequest) return;
+            const localQuery = query.toLocaleLowerCase();
+            let visible = 0;
+            conversationRows.forEach((row) => {{
+              const matches = (row.dataset.search || "").toLocaleLowerCase().includes(localQuery);
+              row.hidden = !matches;
+              if (matches) visible += 1;
+            }});
+            conversationEmpty?.classList.toggle("visible", conversationRows.length > 0 && visible === 0);
+          }}
+        }}, 180);
       }});
 
       const deleteDialog = document.querySelector("[data-delete-dialog]");
@@ -1153,6 +1383,22 @@ def serve_control_center(
                     )
                 )
                 return
+            if parsed.path == "/api/conversation":
+                session_id = _value(query, "session")
+                try:
+                    detail = get_conversation_detail(root, session_id)
+                except FileNotFoundError:
+                    self.send_error(404, "Conversation not found")
+                    return
+                payload = asdict(detail)
+                payload["transcript_html"] = render_markdown_html(detail.transcript)
+                self._send_json(payload)
+                return
+            if parsed.path == "/api/conversations/search":
+                query_text = _value(query, "q")
+                hits = search_conversations(root, query_text, limit=80)
+                self._send_json([asdict(hit) for hit in hits])
+                return
             if parsed.path == "/health":
                 self._send_text("ok\n")
                 return
@@ -1162,7 +1408,11 @@ def serve_control_center(
             parsed = urlparse(self.path)
             try:
                 data = self._read_form()
-                if parsed.path in {"/action/model-settings", "/action/delete-session"} and not secrets.compare_digest(
+                if parsed.path in {
+                    "/action/model-settings",
+                    "/action/delete-session",
+                    "/action/conversation-flags",
+                } and not secrets.compare_digest(
                     _value(data, "csrf_token"), model_settings_token
                 ):
                     self.send_error(403, "Invalid control-center form token")
@@ -1233,6 +1483,17 @@ def serve_control_center(
             encoded = body.encode("utf-8")
             self.send_response(200)
             self.send_header("Content-Type", "text/plain; charset=utf-8")
+            self.send_header("Content-Length", str(len(encoded)))
+            self.end_headers()
+            self.wfile.write(encoded)
+
+        def _send_json(self, payload: object, *, status: int = 200) -> None:
+            encoded = (
+                json.dumps(payload, ensure_ascii=False, separators=(",", ":")) + chr(10)
+            ).encode("utf-8")
+            self.send_response(status)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.send_header("Cache-Control", "no-store")
             self.send_header("Content-Length", str(len(encoded)))
             self.end_headers()
             self.wfile.write(encoded)
@@ -1376,6 +1637,37 @@ def perform_console_action(
             include_generated=False,
         )
         return ConsoleActionResult(message, message_zh, anchor="work")
+
+    if path == "/action/conversation-flags":
+        session_id = _value(data, "session")
+        tags = [
+            item.strip()
+            for item in _value(data, "tags").replace("，", ",").split(",")
+            if item.strip()
+        ]
+        updated = update_conversation_flags(
+            root,
+            session_id,
+            pinned=_value(data, "pinned") == "yes",
+            tags=tags,
+            custom_title=_value(data, "custom_title"),
+            note=_text(data, "note"),
+        )
+        append_event(
+            root,
+            "conversation-curation",
+            subject=session_id,
+            data={
+                "pinned": updated.pinned,
+                "tag_count": len(updated.tags),
+                "renamed": bool(updated.custom_title),
+            },
+        )
+        return ConsoleActionResult(
+            "Conversation details saved",
+            "对话信息已保存",
+            anchor="add",
+        )
 
     if path == "/action/delete-session":
         session_id = _value(data, "session")
@@ -1703,20 +1995,40 @@ def _conversation_rows(root: Path, conversations: list[ConversationRecord]) -> s
                 conversation.recorded_by,
                 conversation.source,
                 conversation.session_id,
+                " ".join(conversation.tags),
+                conversation.note,
             )
         )
+        pin = (
+            f'<span class="pin-mark">{_icon("star")}{_i18n("Pinned", "已置顶")}</span>'
+            if conversation.pinned
+            else ""
+        )
+        tags = "".join(
+            f'<span>#{_escape(tag)}</span>' for tag in conversation.tags[:2]
+        )
+        disabled = ' disabled aria-disabled="true"' if conversation.pinned else ""
+        delete_title = (
+            "Unpin this conversation before removing it"
+            if conversation.pinned
+            else "Remove conversation"
+        )
         rows.append(
-            f'<article class="conversation-row" data-conversation-row data-search="{_escape(search)}">'
+            f'<article class="conversation-row" data-conversation-row '
+            f'data-session="{_escape(conversation.session_id)}" data-search="{_escape(search)}">'
+            f'<button class="conversation-open" type="button" data-conversation-open '
+            f'data-session="{_escape(conversation.session_id)}" aria-pressed="false">'
             f'<div class="conversation-copy"><div class="conversation-title-line"><strong>{_escape(conversation.title)}</strong>'
             f'<time datetime="{_escape(conversation.created_at)}">{_escape(_conversation_date(conversation.created_at))}</time></div>'
-            f'<p class="conversation-preview">{_escape(conversation.preview)}</p><div class="conversation-meta">'
+            f'<p class="conversation-preview" data-conversation-preview>{_escape(conversation.preview)}</p><div class="conversation-meta">'
             f'<span class="status {status_class}">{_i18n(state, state_zh)}</span>'
-            f'<span>{_conversation_source(conversation.source)}</span><span>@{_escape(conversation.recorded_by)}</span></div></div>'
+            f'<span>{_conversation_source(conversation.source)}</span><span>@{_escape(conversation.recorded_by)}</span>'
+            f'{pin}{tags}</div></div></button>'
             f'<button class="delete-trigger" type="button" data-delete-trigger '
             f'data-session="{_escape(conversation.session_id)}" data-title="{_escape(conversation.title)}" '
             f'data-blocks="{impact.memory_blocks}" data-files="{len(impact.memory_files)}" '
             f'data-shared="{len(impact.shared_files)}" data-drafts="{impact.candidate_files}" '
-            f'title="Remove conversation" aria-label="Remove conversation">{_icon("trash")}'
+            f'title="{_escape(delete_title)}" aria-label="{_escape(delete_title)}"{disabled}>{_icon("trash")}'
             f'<span class="visually-hidden">{_i18n("Remove conversation", "删除对话")}</span></button></article>'
         )
     return "".join(rows)
@@ -1852,6 +2164,7 @@ def _icon(name: str) -> str:
         "messages": '<path d="M21 15a4 4 0 0 1-4 4H9l-5 3v-5a4 4 0 0 1-1-2V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4v8Z"/><path d="M8 8h8M8 12h5"/>',
         "search": '<circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/>',
         "trash": '<path d="M3 6h18M8 6V4h8v2M19 6l-1 15H6L5 6M10 11v5M14 11v5"/>',
+        "star": '<path d="m12 2.8 2.8 5.7 6.3.9-4.6 4.4 1.1 6.3-5.6-3-5.6 3 1.1-6.3-4.6-4.4 6.3-.9L12 2.8Z"/>',
         "cpu": '<rect width="14" height="14" x="5" y="5" rx="2"/><path d="M9 9h6v6H9zM9 1v4M15 1v4M9 19v4M15 19v4M19 9h4M19 14h4M1 9h4M1 14h4"/>',
         "arrow": '<path d="m5 12 14-7-4 14-3-6-7-1Z"/><path d="m12 13 7-8"/>',
         "settings": '<path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.8 2.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6v.2h-4V21a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1L4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9A1.7 1.7 0 0 0 3 14H2.8v-4H3a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9L4.2 7 7 4.2l.1.1A1.7 1.7 0 0 0 9 4.6 1.7 1.7 0 0 0 10 3V2.8h4V3a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1L19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.2v4H21a1.7 1.7 0 0 0-1.6 1Z"/>',

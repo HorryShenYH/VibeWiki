@@ -13,7 +13,13 @@ from vibewiki.assurance import build_assurance_report
 from vibewiki.capture import capture_session
 from vibewiki.cli import build_parser, run as run_cli
 from vibewiki.control_center import perform_console_action, render_control_center
-from vibewiki.conversations import delete_conversation, plan_conversation_deletion
+from vibewiki.conversations import (
+    delete_conversation,
+    get_conversation_detail,
+    plan_conversation_deletion,
+    search_conversations,
+    update_conversation_flags,
+)
 from vibewiki.dashboard import generate_dashboard
 from vibewiki.distill import distill_session
 from vibewiki.events import read_events
@@ -1065,6 +1071,81 @@ All retry regression tests passed.
             self.assertIn("data-delete-dialog", rendered)
             self.assertIn('action="/action/delete-session"', rendered)
             self.assertIn('value="form-token"', rendered)
+
+    def test_conversation_reader_search_and_local_curation(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            init_project(root)
+            source = root / "agent-session.md"
+            source.write_text(
+                """# Diagnose Worker Retry
+
+The hidden failure was a stale idempotency lease named zircon-window-47.
+
+## Final Outcome
+
+Reset the lease before replaying the worker.
+""",
+                encoding="utf-8",
+            )
+            session = import_markdown_session(
+                root,
+                source,
+                session_name="worker-retry",
+            )
+
+            detail = get_conversation_detail(root, session.session_id)
+            self.assertEqual(detail.transcript_file, "raw_session.md")
+            self.assertIn("zircon-window-47", detail.transcript)
+            hits = search_conversations(root, "zircon-window-47")
+            self.assertEqual([hit.session_id for hit in hits], [session.session_id])
+            self.assertIn("zircon-window-47", hits[0].snippet)
+
+            updated = update_conversation_flags(
+                root,
+                session.session_id,
+                pinned=True,
+                tags=["debug", "replay"],
+                custom_title="Worker replay diagnosis",
+                note="Keep this until the retry migration lands.",
+            )
+            self.assertTrue(updated.pinned)
+            self.assertEqual(updated.tags, ("debug", "replay"))
+            self.assertEqual(updated.title, "Worker replay diagnosis")
+            flags_path = root / ".vibewiki" / "private" / "conversation_flags.json"
+            self.assertTrue(flags_path.is_file())
+            valid_flags = flags_path.read_text(encoding="utf-8")
+            flags_path.write_text("{broken", encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "refusing to overwrite"):
+                update_conversation_flags(
+                    root,
+                    session.session_id,
+                    pinned=False,
+                    tags=[],
+                    custom_title="",
+                    note="",
+                )
+            self.assertEqual(flags_path.read_text(encoding="utf-8"), "{broken")
+            flags_path.write_text(valid_flags, encoding="utf-8")
+
+            rendered = render_control_center(root, csrf_token="curation-token")
+            self.assertIn("data-conversation-reader", rendered)
+            self.assertIn("/api/conversations/search", rendered)
+            self.assertIn('action="/action/conversation-flags"', rendered)
+            self.assertIn('aria-disabled="true"', rendered)
+            with self.assertRaisesRegex(ValueError, "Pinned conversations"):
+                delete_conversation(root, session.session_id)
+
+            update_conversation_flags(
+                root,
+                session.session_id,
+                pinned=False,
+                tags=[],
+                custom_title="",
+                note="",
+            )
+            deleted = delete_conversation(root, session.session_id)
+            self.assertTrue((deleted.trash_dir / "session" / "raw_session.md").is_file())
 
     def test_delete_conversation_preserves_memory_supported_by_another_session(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

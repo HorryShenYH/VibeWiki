@@ -31,6 +31,22 @@ The same assurance-first pipeline applies to both scopes. Project memory should 
 more concrete and evidence-bound; personal memory should be promoted only when a
 lesson proves useful beyond one repository.
 
+## Memory Layers
+
+VibeWiki keeps three responsibilities separate:
+
+1. **Source** - imported conversation Markdown under `.vibewiki/sessions/`.
+   It is inspectable evidence and is not rewritten by search or distillation.
+2. **Derived memory** - candidate patches, approved Wiki blocks, skills, and
+   agent context. This layer can be regenerated from source and policy.
+3. **Curation** - local pins, custom titles, tags, and notes under
+   `.vibewiki/private/`. It records human intent and survives derived-memory
+   rebuilds without entering team Wiki content.
+
+Approved Wiki and skills are the team-sharing surface. Raw conversations and
+private curation stay local by default, reducing accidental disclosure while
+preserving provenance on the machine that imported them.
+
 ## Bootstrap And Growth
 
 VibeWiki supports two complementary modes:

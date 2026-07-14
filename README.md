@@ -102,9 +102,23 @@ coverage after each distillation:
 
 The report says when semantic review was not run. It proves which memory
 snapshot was processed; it does not pretend that software guaranteed every
-claim. This approach borrows the strongest assurance ideas from
-[Recensa](docs/research_recensa.md) without spending three model calls on every
-conversation.
+claim. Local assurance is a VibeWiki policy layer and does not require extra
+model calls.
+
+## Conversation History Stays Inspectable
+
+VibeWiki keeps the source conversation beside the memory compiled from it. In
+the control center you can:
+
+- open the original Markdown without leaving the conversation library
+- search inside conversation bodies, including Chinese text
+- pin, rename, tag, or privately annotate a conversation
+- see how many Wiki blocks and files the conversation produced
+- preview provenance impact before moving an unpinned conversation to Trash
+
+The source/derived/curation separation is inspired by
+[S40911120/recensa](docs/research_recensa.md), while VibeWiki remains
+agent-agnostic and dependency-free.
 
 ## Why Developers Care
 
@@ -155,8 +169,9 @@ guided personal/project Wiki setup or an initial project brief.
 The control center is the primary interface:
 
 - paste a conversation or import a shared link
-- browse and search every imported conversation in one library
-- remove a conversation with a Wiki impact preview and recoverable Trash archive
+- browse, open, and full-text search every imported conversation in one library
+- pin important sources and keep local tags, titles, and notes outside generated memory
+- remove an unpinned conversation with a Wiki impact preview and recoverable Trash archive
 - generate memory automatically and review only flagged exceptions
 - ask questions or build context for the next AI agent
 
@@ -346,7 +361,7 @@ conversation's source marker are withdrawn. If another conversation also
 contributed to the same Wiki page or skill, its independently marked content and
 registry evidence remain in place.
 
-![VibeWiki conversation import and provenance-aware conversation library](docs/assets/conversation-library.png)
+![VibeWiki conversation import, source reader, full-text search, and provenance-aware library](docs/assets/conversation-library.png)
 
 Every distillation writes `assurance.json` beside the selected patch. It checks
 source linkage, conflicts, duplicate candidates, incomplete coverage, and

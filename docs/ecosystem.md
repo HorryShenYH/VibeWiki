@@ -91,21 +91,31 @@ AI collaboration trace -> typed candidate memory -> assurance -> Wiki update
 
 The storage should stay boring and portable. The lifecycle is the product.
 
-## Assurance Systems
+## Conversation History Readers
 
-Recensa demonstrates a useful separation between generation and assurance:
-structured findings, duplicate collapse, visible disagreement, honest partial
-status, and a proof artifact that does not claim correctness.
+[S40911120/recensa](https://github.com/S40911120/recensa) makes Claude Code's
+raw JSONL history readable, searchable, and auditable. Its strongest general
+design is the separation of source transcripts, a disposable search index, and
+durable user curation.
 
-VibeWiki applies that discipline to project memory with a cheaper default:
+VibeWiki borrows that source-layer discipline:
+
+- original imported conversations remain inspectable
+- body search returns evidence from the conversation library
+- local pins, tags, titles, and notes stay separate from generated memory
+- deletion is guarded and provenance-aware
+- a future large-library index can be rebuilt without changing curated state
+
+The projects stop at different boundaries:
 
 ```text
-local structural checks -> compact exception ledger -> targeted human review
+Recensa  -> inspect and audit detailed Claude Code transcripts
+VibeWiki -> compile conversations from many agents into evolving team memory
 ```
 
-Multi-model semantic review may be useful for high-impact skills or unresolved
-conflicts, but it should remain optional rather than charging every conversation
-three times. See `docs/research_recensa.md`.
+VibeWiki's local assurance and exception review remain a separate policy layer;
+they are not features derived from Recensa. See `docs/research_recensa.md` for
+the source review and adaptation decisions.
 
 ## Design Principle
 

@@ -24,6 +24,12 @@ UNIT_COLLECTIONS = {
     "workflows": "workflow",
 }
 
+CURATION_SCHEMA = 1
+MAX_CUSTOM_TITLE = 160
+MAX_NOTE = 2000
+MAX_TAGS = 20
+MAX_TAG_LENGTH = 40
+
 
 @dataclass(frozen=True)
 class ConversationRecord:
@@ -34,6 +40,18 @@ class ConversationRecord:
     recorded_by: str
     source: str
     status: str
+    pinned: bool = False
+    tags: tuple[str, ...] = ()
+    custom_title: str = ""
+    note: str = ""
+
+
+@dataclass(frozen=True)
+class ConversationSearchHit:
+    session_id: str
+    title: str
+    snippet: str
+    score: int
 
 
 @dataclass(frozen=True)
@@ -54,6 +72,14 @@ class DeletionResult:
 
 
 @dataclass(frozen=True)
+class ConversationDetail:
+    conversation: ConversationRecord
+    transcript: str
+    transcript_file: str
+    impact: DeletionImpact
+
+
+@dataclass(frozen=True)
 class _MemoryBlock:
     descriptor: str
     text: str
@@ -66,6 +92,7 @@ def list_conversations(project: Path) -> list[ConversationRecord]:
         return []
 
     merged = _merged_session_ids(root)
+    flags = _read_conversation_flags(root)
     records: list[ConversationRecord] = []
     for session_dir in sessions_dir.iterdir():
         if not session_dir.is_dir():
@@ -86,19 +113,139 @@ def list_conversations(project: Path) -> list[ConversationRecord]:
             status = "candidate"
         else:
             status = "captured"
+        curation = flags.get(session_id, {})
+        custom_title = str(curation.get("custom_title", "")).strip()
+        tags = _clean_tags(curation.get("tags", []))
         records.append(
             ConversationRecord(
                 session_id=session_id,
-                title=title,
+                title=custom_title or title,
                 preview=preview or "No outcome recorded yet.",
                 created_at=metadata.get("created_at", "") or _date_from_session_id(session_id),
                 recorded_by=metadata.get("recorded_by", "unknown") or "unknown",
                 source=_source_label(root, metadata),
                 status=status,
+                pinned=bool(curation.get("pinned", False)),
+                tags=tags,
+                custom_title=custom_title,
+                note=str(curation.get("note", "")).strip(),
             )
         )
 
-    return sorted(records, key=lambda item: (item.created_at, item.session_id), reverse=True)
+    return sorted(
+        records,
+        key=lambda item: (item.pinned, item.created_at, item.session_id),
+        reverse=True,
+    )
+
+
+def get_conversation_detail(project: Path, session_id: str) -> ConversationDetail:
+    root = project.resolve()
+    session_dir = _session_dir(root, session_id)
+    conversation = next(
+        (item for item in list_conversations(root) if item.session_id == session_id),
+        None,
+    )
+    if conversation is None:
+        raise FileNotFoundError(f"Conversation not found: {session_id}")
+    raw_path = session_dir / "raw_session.md"
+    transcript_path = raw_path if raw_path.is_file() else session_dir / "session.md"
+    return ConversationDetail(
+        conversation=conversation,
+        transcript=read_text_if_exists(transcript_path),
+        transcript_file=transcript_path.name,
+        impact=plan_conversation_deletion(root, session_id),
+    )
+
+
+def search_conversations(
+    project: Path,
+    query: str,
+    *,
+    limit: int = 50,
+) -> list[ConversationSearchHit]:
+    root = project.resolve()
+    needle = query.strip().casefold()
+    if not needle:
+        return []
+    hits: list[tuple[ConversationSearchHit, bool, str]] = []
+    for conversation in list_conversations(root):
+        session_dir = _session_dir(root, conversation.session_id)
+        raw = read_text_if_exists(session_dir / "raw_session.md")
+        normalized = read_text_if_exists(session_dir / "session.md")
+        metadata = " ".join(
+            (
+                conversation.title,
+                conversation.preview,
+                conversation.recorded_by,
+                conversation.source,
+                " ".join(conversation.tags),
+                conversation.note,
+                conversation.session_id,
+            )
+        )
+        score = 0
+        source = ""
+        if needle in conversation.title.casefold():
+            score += 8
+            source = conversation.title
+        if needle in conversation.preview.casefold():
+            score += 5
+            source = source or conversation.preview
+        if needle in metadata.casefold():
+            score += 3
+            source = source or metadata
+        for content in (raw, normalized):
+            if needle in content.casefold():
+                score += 2
+                source = source or content
+                break
+        if not score:
+            continue
+        hit = ConversationSearchHit(
+            session_id=conversation.session_id,
+            title=conversation.title,
+            snippet=_search_snippet(source, query),
+            score=score,
+        )
+        hits.append((hit, conversation.pinned, conversation.created_at))
+    hits.sort(key=lambda item: (item[0].score, item[1], item[2]), reverse=True)
+    return [item[0] for item in hits[: max(1, min(limit, 200))]]
+
+
+def update_conversation_flags(
+    project: Path,
+    session_id: str,
+    *,
+    pinned: bool,
+    tags: list[str] | tuple[str, ...],
+    custom_title: str,
+    note: str,
+) -> ConversationRecord:
+    root = project.resolve()
+    _session_dir(root, session_id)
+    clean_title = custom_title.strip()
+    clean_note = note.strip()
+    clean_tags = _clean_tags(tags)
+    if len(clean_title) > MAX_CUSTOM_TITLE:
+        raise ValueError(f"Conversation title exceeds {MAX_CUSTOM_TITLE} characters.")
+    if len(clean_note) > MAX_NOTE:
+        raise ValueError(f"Conversation note exceeds {MAX_NOTE} characters.")
+    flags = _read_conversation_flags(root)
+    next_value = {
+        "pinned": bool(pinned),
+        "tags": list(clean_tags),
+        "custom_title": clean_title,
+        "note": clean_note,
+    }
+    if pinned or clean_tags or clean_title or clean_note:
+        flags[session_id] = next_value
+    else:
+        flags.pop(session_id, None)
+    _write_conversation_flags(root, flags)
+    return next(
+        item for item in list_conversations(root) if item.session_id == session_id
+    )
 
 
 def plan_conversation_deletion(project: Path, session_id: str) -> DeletionImpact:
@@ -136,6 +283,8 @@ def plan_conversation_deletion(project: Path, session_id: str) -> DeletionImpact
 def delete_conversation(project: Path, session_id: str) -> DeletionResult:
     root = project.resolve()
     session_dir = _session_dir(root, session_id)
+    if bool(_read_conversation_flags(root).get(session_id, {}).get("pinned", False)):
+        raise ValueError("Pinned conversations cannot be removed. Unpin this conversation first.")
     impact = plan_conversation_deletion(root, session_id)
     metadata = _metadata(session_dir / "metadata.yaml")
     trash_dir = _new_trash_dir(root, session_id)
@@ -187,6 +336,7 @@ def delete_conversation(project: Path, session_id: str) -> DeletionResult:
         _backup_file(registry_file, root, trash_dir)
     registry_removed = _remove_registry_source(root, session_id)
     _move_owned_sources(root, session_dir, session_id, metadata, trash_dir)
+    _remove_conversation_flags(root, session_id)
 
     manifest = {
         "schema": 1,
@@ -212,6 +362,91 @@ def delete_conversation(project: Path, session_id: str) -> DeletionResult:
         },
     )
     return DeletionResult(impact=impact, trash_dir=trash_dir)
+
+
+def _conversation_flags_path(root: Path) -> Path:
+    return root / ".vibewiki" / "private" / "conversation_flags.json"
+
+
+def _read_conversation_flags(root: Path) -> dict[str, dict[str, object]]:
+    path = _conversation_flags_path(root)
+    if not path.is_file():
+        return {}
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise ValueError(
+            f"Conversation curation is invalid; refusing to overwrite {path}."
+        ) from exc
+    if not isinstance(payload, dict):
+        raise ValueError(
+            f"Conversation curation is invalid; refusing to overwrite {path}."
+        )
+    sessions = payload.get("sessions", {})
+    if not isinstance(sessions, dict):
+        raise ValueError(
+            f"Conversation curation is invalid; refusing to overwrite {path}."
+        )
+    return {
+        str(session_id): value
+        for session_id, value in sessions.items()
+        if isinstance(value, dict)
+    }
+
+
+def _write_conversation_flags(root: Path, flags: dict[str, dict[str, object]]) -> None:
+    path = _conversation_flags_path(root)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "schema": CURATION_SCHEMA,
+        "sessions": dict(sorted(flags.items())),
+    }
+    temporary = path.with_suffix(".tmp")
+    temporary.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + chr(10),
+        encoding="utf-8",
+    )
+    temporary.replace(path)
+
+
+def _remove_conversation_flags(root: Path, session_id: str) -> None:
+    flags = _read_conversation_flags(root)
+    if flags.pop(session_id, None) is None:
+        return
+    _write_conversation_flags(root, flags)
+
+
+def _clean_tags(values: object) -> tuple[str, ...]:
+    if not isinstance(values, (list, tuple)):
+        return ()
+    tags: list[str] = []
+    for value in values:
+        clean = str(value).strip()
+        if not clean or clean in tags:
+            continue
+        if len(clean) > MAX_TAG_LENGTH:
+            raise ValueError(f"Conversation tags must be at most {MAX_TAG_LENGTH} characters.")
+        tags.append(clean)
+        if len(tags) > MAX_TAGS:
+            raise ValueError(f"A conversation can have at most {MAX_TAGS} tags.")
+    return tuple(tags)
+
+
+def _search_snippet(text: str, query: str, *, radius: int = 110) -> str:
+    compact = re.sub(r"\s+", " ", text).strip()
+    if not compact:
+        return "Matched conversation metadata."
+    index = compact.casefold().find(query.strip().casefold())
+    if index < 0:
+        return compact[: radius * 2].strip()
+    start = max(0, index - radius)
+    end = min(len(compact), index + len(query.strip()) + radius)
+    snippet = compact[start:end].strip(" -#>*_" + chr(96))
+    if start:
+        snippet = "..." + snippet
+    if end < len(compact):
+        snippet += "..."
+    return snippet
 
 
 def _remove_session_blocks(text: str, session_id: str) -> tuple[str, list[_MemoryBlock]]:
